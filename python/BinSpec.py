@@ -1,6 +1,6 @@
 from flipper import fftTools
 
-def radialPower(map_id,map_type='B',plot=True,show=False,Return=False,log=True):
+def radialPower(map_id,map_type='B',plot=True,show=False,Return=False,xlog=True,ylog=False):
     """ Function to create radial power spectra for 2D power spectra.
 
     NB: THIS DOES NOT TAKE INTO ACCOUNT WINDO FUNCTION
@@ -39,22 +39,30 @@ def radialPower(map_id,map_type='B',plot=True,show=False,Return=False,log=True):
 
     # Plot output
     if plot:
-        import matplotlib.pyplot as plt
-        plt.errorbar(l_bin,mean_pow,yerr=std_pow,xerr=0.5*(l_bin[1]-l_bin[0]))
-        plt.title(str(map_type)+'-mode Radially Binned Power Spectrum')
-        plt.xlabel('l')
-        plt.ylabel('Mean Power')
-        if log:
-            plt.xscale('log') # logarithmic scaling
-        if show:
-            plt.show()
-        plt.savefig(work_dir+'radialPower_'+str(map_type)+str(map_id)+'.png')
-        plt.clf()
+        fftTools.plotBinnedPower(l_bin,mean_pow,minL=min(l_bin),maxL=max(l_bin),\
+                                     yrange=None,title=str(map_type)+'-mode Radially Binned Power Spectrum',\
+                                     pngFile=work_dir+'radialPower_'+str(map_type)+str(map_id)+'.png',\
+                                     show=show,returnPlot=Return,errorBars=std_pow,\
+                                     ylog=ylog,xlog=xlog)
 
-    if Return:
-        return l_bin,mean_pow,std_pow,pix_pow
-    else:
-        return None
+
+        
+        #import matplotlib.pyplot as plt
+        #plt.errorbar(l_bin,mean_pow,yerr=std_pow,xerr=0.5*(l_bin[1]-l_bin[0]))
+        #plt.title(str(map_type)+'-mode Radially Binned Power Spectrum')
+        #plt.xlabel('l')
+        #plt.ylabel('Mean Power')
+        #if log:
+        #    plt.xscale('log') # logarithmic scaling
+        #if show:
+        #    plt.show()
+        #plt.savefig(work_dir+'radialPower_'+str(map_type)+str(map_id)+'.png')
+        #plt.clf()
+
+    #if Return:
+    #    return l_bin,mean_pow,std_pow,pix_pow
+    #else:
+    #    return None
     
 def bin_list(l_min,l_max,l_step):
     """Create the binning.dat file describing the different radial bins used here.
