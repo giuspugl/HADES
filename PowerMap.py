@@ -1,3 +1,4 @@
+from flipper import *
 
 def createMap(map_id,warnings=False,plotPNG=True):
     """ Create the B-,E-,T- space 2D power maps from input simulation maps. Simulation maps are those of Vansyngel+16 provided and reduced by Alex van Engelen. This uses the flipperPol hybrid scheme to minimise E-B leakage in B-maps.
@@ -8,7 +9,6 @@ def createMap(map_id,warnings=False,plotPNG=True):
 
     Output: T,B,E maps are saved in the ProcMaps/ directory and pngs are in the ProcMaps/png directory 
     """
-    from flipper import *
     import flipperPol as fp
 
     import os
@@ -135,37 +135,46 @@ if __name__=='__main__':
      # Display progress bar with tqdm
      r = list(tqdm.tqdm(p.imap(createMap,file_ids),total=len(file_ids)))
 
-def RescaledPlot(map_id,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=1000,l_step=10):
+def RescaledPlot(map_id,map_size=10,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=1000,l_step=100,returnMap=False):
     """ Create + plot the power map rescaled by a factor of l^{slope} where slope is found from radially binning the power spectrum in a specified range.
 
     NB: This can also plot unscaled plots using rescale=False
     
     Inputs: map_id - 0 to 315
     map_type='B'
+    map_size = [3,5,10] -> map widths
     rescale - whether to rescale plot (else just return power map)
     show - Display rescaled map
     save - Save rescaled map
     showFit - show fitting of radially binned spectrum to model
     saveFit - save fitting as png
     l_min,l_max,l_step - define min/max/separation of l values
+    returnMap = return power map instance + fitted slope
 
-    Output: rescaled plot, saved in RescaledPlots/ dir (if save)
+    Output: rescaled plot + fitted slope, saved in RescaledPlots/ dir (if save)
     + fitting plot (if saveFit)
     """
 
     import numpy as np
-    from flipper import *
     import flipperPol as fp
     import os
     from scipy.optimize import curve_fit
 
-    # Define output directory
-    outDir = '/data/ohep2/RescaledPlots/'
+    # Input+Output map directory:
+    if map_size==10:
+        inDir='/data/ohep2/sims/simdata/'#3deg/'#simdata/'
+        outDir='/data/ohep2/RescaledPlots/'
+    elif map_size==5:
+    	inDir='/data/ohep2/sims/5deg/'
+    	outDir='/data/ohep2/RescaledPlots/5deg/'
+    elif map_size==3:
+    	inDir='/data/ohep2/sims/3deg/'
+    	outDir='/data/ohep2/RescaledPlots/3deg/'
+    else: 
+    	return Exception('Incorrect Map Size')
+    
     if not os.path.exists(outDir):
         os.makedirs(outDir)
-
-    # Input map directory:
-    inDir='/data/ohep2/sims/simdata/'
     
     # Read in maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
@@ -212,23 +221,26 @@ def RescaledPlot(map_id,map_type='B',rescale=True,show=False,save=True,showFit=F
         param,covariance=curve_fit(pow_model,l_bin,pow_mean,sigma=pow_std)
         slope=param[1] # model -slope
         A=param[0] # amplitude
-        print('%Slope: .3f +/- %.3f' %(slope,covariance[1,1]))
+        print('Slope '+str(slope)+' +/- '+str(covariance[1,1]))
 
         # Plot + save fitting plot in log space
         if showFit or saveFit:
             import matplotlib.pyplot as plt
-            plt.errorbar(l_bin,pow_mean,yerr=pow_std)
-            plt.plot(l_bin,pow_model(l_bin,A,slope))
-            plt.xscale('log')
-            plt.yscale('log')
-            plt.title(str(map_type)+' '+str(map_id)+' fit with slope '+str(slope))
-            plt.xlabel('l')
-            plt.ylabel('Mean power in annulus')
+            fig=plt.figure()
+            ax=fig.add_subplot(1,1,1)
+            ax.errorbar(l_bin,pow_mean,yerr=pow_std)
+            ax.plot(l_bin,pow_model(l_bin,A,slope))
+            #print A, slope
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            fig.suptitle(str(map_type)+' '+str(map_id)+' fit with slope '+str(slope))
+            ax.set_xlabel('l')
+            ax.set_ylabel('Mean power in annulus')
             if saveFit:
-                plt.savefig(outDir+str(map_type)+str(map_id)+'fit.png')
+                fig.savefig(outDir+str(map_type)+str(map_id)+'fit.png')
             if showFit:
-                plt.show()
-            plt.clf()
+                fig.show()
+            plt.close(fig)
 
         if save:
             outFile=outDir+str(map_type)+str(map_id)+'_RescaledMap.png'
@@ -239,16 +251,20 @@ def RescaledPlot(map_id,map_type='B',rescale=True,show=False,save=True,showFit=F
         Pmap.plot(powerOfL=slope,log=True,zoomUptoL=2000,\
                       pngFile=outFile,show=show,\
                       title=str(map_type)+str(map_id)+' Map with scaling by l^'+str(slope))
-
+        
     else:
         # Plot and save unscaled map instead
         if save:
             outFile=outDir+str(map_type)+str(map_id)+'_Map.png'
         else:
             outFile=None
-        Pmap.plot(log=True,zoomUptoL=2000,pngFile=outFile,title=str(map_type)+str(map_id)+' Map with no scaling applied')
+        if show or save:
+            Pmap.plot(log=True,zoomUptoL=2000,pngFile=outFile,title=str(map_type)+str(map_id)+' Map with no scaling applied')
 
-    return None
+    if returnMap:
+        return Pmap,slope,A
+    else:
+        return None
     
      
 def AnisotropyPower(map_id,show=True,save=False,fitPlot=False):
