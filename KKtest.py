@@ -1,0 +1,155 @@
+def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,map=None,returnSlope=False):
+    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle.
+    Inputs: map_id
+    map_size = 3,5,10 -> width of map in degrees
+    l_step (how large to bin data)
+    lMin,lMax= fitting range of l
+    slope,map -> best fit slope and map if already estimated (recomputed if None)
+    returnSlope = whether to return slope in addition
+    
+    Outputs:
+    p_str,p_ang -> polarisation strength and angle
+    """
+    from hades import PowerMap
+    import numpy as np
+
+    if map==None and slope==None:
+        # Create rescaled map and slope
+        print 'Creating new map'
+        map,slope,_=PowerMap.RescaledPlot(map_id,map_size=map_size,l_min=lMin,l_max=lMax,l_step=l_step,rescale=True,show=False,showFit=False,returnMap=True)
+    
+    # print('Using map size of %s' %(map_size))
+
+
+    # Initialise variables
+    A_num,A_den=0,0
+    Afc_num,Afc_den=0,0
+    Afs_num,Afs_den=0,0
+
+    # Define fitting range
+    lMax=2000
+    lMin=100
+    
+    # Construct estimators over all pixels
+    for i in range(map.Ny):
+        for j in range(map.Nx):
+            l=map.modLMap[i,j]
+            ang=map.thetaMap[i,j]*np.pi/180
+            if (l<lMax) and (l>lMin):
+                fiducial = l**(-slope)
+                A_num+=map.powerMap[i,j]/fiducial
+                A_den+=1 # for A estimator
+                Afc_num+=map.powerMap[i,j]/fiducial*np.cos(4*ang)
+                Afc_den+=(np.cos(4*ang)**2) # for A*fc estimator
+                Afs_num+=map.powerMap[i,j]/fiducial*np.sin(4*ang)
+                Afs_den+=(np.sin(4*ang)**2)
+    A=A_num/A_den # A estimator
+    fs=Afs_num/Afs_den / A # fs estimation
+    fc=Afc_num/Afc_den / A
+
+    # Compute polarisation strength + angle
+    p_str = np.sqrt(fs**2+fc**2) # Strength
+    p_ang=0.25*np.arctan(fs/fc)*180/np.pi # in degrees (0 to 45)
+
+    if returnSlope:
+        return p_str,p_ang,A,slope
+    else:
+        return p_str,p_ang,A
+
+if __name__=='__main__':
+    """ Batch process using all available cores to compute the angle and polariasation strengths of a map using the angle_estimator code above"""
+
+    # Import modules
+    import tqdm
+    import sys
+    import numpy as np
+    import multiprocessing as mp
+
+    # Default parameters
+    nmin=0
+    nmax=315
+    cores=8
+
+    # Parameters if input from the command line
+    if len(sys.argv)>=2:
+        nmin = int(sys.argv[1])
+    if len(sys.argv)>=3:
+        nmax = int(sys.argv[2])
+    if len(sys.argv)==4:
+        cores = int(sys.argv[3])
+
+    # Start the multiprocessing
+    p = mp.Pool(processes=cores)
+    file_ids = np.arange(nmin,nmax+1)
+
+    # Multiprocess tasks and display progress with tqdm
+    outputs = list(tqdm.tqdm(p.imap(angle_estimator,file_ids),total=len(file_ids)))
+
+    # Reconstruct arrays
+    ang = np.zeros(len(outputs))
+    pol= np.zeros(len(outputs))
+    for l,line in enumerate(outputs):
+        pol[l]=line[0]
+        ang[l]=line[1]
+
+    # Save outputs
+    np.savez('/data/ohep2/angleMaps5Deg.npz',pol=pol,ang=ang)
+    
+    
+def reconstructor(map_size=10):
+    """ Plot the angle and power on a spherical grid for all patches
+    Input: map_size = 3,5,10"""
+    import numpy as np
+
+    # Read in data
+    data=np.load('/data/ohep2/angleMaps'+str(map_size)+'Deg.npz')
+    pol=data['pol']
+    ang=data['ang']
+
+    # Also read in coordinates of patches
+    if map_size==10:
+        coords=np.loadtxt('/data/ohep2/sims/simdata/fvsmapRAsDecs.txt')
+  	# Create lists of patch centres
+    	ras=np.zeros(len(pol))
+    	decs=np.zeros(len(pol))
+    	for i in range(len(pol)):
+        	ras[i]=coords[i][1]
+        	decs[i]=coords[i][2]
+    elif map_size==5 or map_size==3:
+    	import pickle
+    	ras=pickle.load(open('/data/ohep2/sims/'+str(map_size)+'deg/fvsmapRas.pkl','rb'))
+    	decs=pickle.load(open('/data/ohep2/sims/'+str(map_size)+'deg/fvsmapDecs.pkl','rb'))
+    	ras=ras[:len(pol)]
+    	decs=decs[:len(pol)] # remove any extras
+    else:
+       	return Exception('Invalid map_size')
+
+
+    # Now plot on grid
+    import astropy.coordinates as coords
+    import astropy.units as u
+    import matplotlib.pyplot as plt
+
+    ra_deg=coords.Angle(ras*u.degree) # convert to correct format
+    ra_deg=ra_deg.wrap_at(180*u.degree)
+    dec_deg=coords.Angle(decs*u.degree)
+
+    #Plot polarisation strength
+    fig=plt.figure()
+    fig.add_subplot(111,projection='mollweide')
+    plt.scatter(ra_deg.radian,dec_deg.radian,c=pol,marker='o',s=30)
+    plt.colorbar()
+    plt.title('Polarisation Strength Map')
+    plt.savefig('polarisationMap'+str(map_size)+'Deg.png')
+    plt.clf()
+
+    #Plot angle
+    fig=plt.figure()
+    fig.add_subplot(111,projection='mollweide')
+    plt.scatter(ra_deg.radian,dec_deg.radian,marker='o',c=ang,s=50)
+    plt.colorbar()
+    plt.title('Polarisation Angle Map')
+    plt.savefig('angleMap'+str(map_size)+'Deg.png')
+    plt.clf()
+
+    return None    

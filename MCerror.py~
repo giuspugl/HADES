@@ -1,0 +1,42 @@
+def error_wrapper(map_id,map_size='5',N_sims=100,l_step=50):
+    """ Computes many random Monte Carlo simulations of Gaussian field realisation of Cl spectrum to test estimations. This calls error_estimator to perform the analysis.
+    In: map_id==map number
+    map_size = size in degrees (3,5,10 only)
+    N_sims = no. of estimates
+    l_step = step-size for slope estimation
+    """
+    from flipper import *
+
+    # Configure directories
+    if map_size==3:
+        indir='/data/ohep2/sims/3deg/'
+    elif map_size==5:
+        indir='/data/ohep2/sims/5deg/'
+    elif map_size==10:
+        indir='/data/ohep2/sims/simdata/'
+    else:
+        return Exception('Incorrect map size')
+        
+    # Load in real space map (just used as a template)
+    Tmap=liteMap.liteMapFromFits(indir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+
+    from .PowerMap import RescaledPlot
+    Bmap,slope,A=RescaledPlot(l_min=100,l_max=2000,l_step=l_step,map_size=map_size,\
+                                  rescale=True,returnMap=True,save=False,\
+                                  show=False,saveFit=False,showFit=False)
+
+    return None
+
+def error_estimator(Tmap,slope,A):
+    """ This function computes a random Gaussian field and applies statistical estimators to it to find error in predictions.
+    Inputs:real space Bmap
+    slope=best fit slope of power spectrum map
+    A=amplitude of Bmap
+    """
+    # define Cl predictions
+    l = np.range(1,20000)
+    Cl = A*(l**(-slope))
+
+    MCmap=Tmap.fillWithGaussianRandomField(l,Cl,buffer=3)
+    # make 3x size map to avoid periodic boundary condition erorrs
+    MCmap.fftMap
