@@ -19,7 +19,7 @@ def est_and_err(map_id,map_size=5,N_sims=100,l_step=50):
     means,stds=error_wrapper(map_id,map_size=map_size,N_sims=N_sims,l_step=l_step,slope=slope,A=A)
     best_estim=[]
     for i in range(len(best_preds)):
-        best_estim.append([best_preds[i],stds[i]])
+        best_estim.append([best_preds[i],stds[i],means[i]])
 
     return best_estim
 
