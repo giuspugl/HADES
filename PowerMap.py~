@@ -1,11 +1,12 @@
 from flipper import *
 
-def createMap(map_id,warnings=False,plotPNG=True):
+def createMap(map_id,warnings=False,plotPNG=True,Fits=False):
     """ Create the B-,E-,T- space 2D power maps from input simulation maps. Simulation maps are those of Vansyngel+16 provided and reduced by Alex van Engelen. This uses the flipperPol hybrid scheme to minimise E-B leakage in B-maps.
     
     Input: map_id - number of map - integer from 00001-00315
     warnings - whether to ignore overwrite warnings
     plotPNG - whether to save PNG files
+    Fits = whether to save FITS file
 
     Output: T,B,E maps are saved in the ProcMaps/ directory and pngs are in the ProcMaps/png directory 
     """
@@ -14,9 +15,9 @@ def createMap(map_id,warnings=False,plotPNG=True):
     import os
     
     # Map directories
-    filepath = '/data/ohep2/sims/simdata/' # This houses all the simulation data
+    filepath = '/data/ohep2/sims/3deg/' # This houses all the simulation data
     outdir = '/data/ohep2/ProcMaps/'
-    pngdir = "/data/ohep2/ProcMaps/png/"
+    pngdir = "/data/ohep2/ReportPlots/" #'ProcMaps/png/"
     Q_path = filepath+'fvsmapQ_'+str(map_id).zfill(5)+'.fits'
     U_path = filepath+'fvsmapU_'+str(map_id).zfill(5)+'.fits'
     T_path = filepath+'fvsmapT_'+str(map_id).zfill(5)+'.fits'
@@ -51,9 +52,11 @@ def createMap(map_id,warnings=False,plotPNG=True):
         import warnings
         warnings.filterwarnings("ignore") # ignore overwrite warnings
 
-    pTT.writeFits(outdir+'powerT'+str(map_id)+'.fits',overWrite=True)
-    pBB.writeFits(outdir+'powerB'+str(map_id)+'.fits',overWrite=True)
-    pEE.writeFits(outdir+'powerE'+str(map_id)+'.fits',overWrite=True)
+	
+    if Fits:
+    	pTT.writeFits(outdir+'powerT'+str(map_id)+'.fits',overWrite=True)
+    	pBB.writeFits(outdir+'powerB'+str(map_id)+'.fits',overWrite=True)
+    	pEE.writeFits(outdir+'powerE'+str(map_id)+'.fits',overWrite=True)
 
     # Plot and save as pngs
     if plotPNG:
@@ -65,7 +68,7 @@ def createMap(map_id,warnings=False,plotPNG=True):
         pBB.plot(log=True,show=False,pngFile=pngdir+"powerB"+str(map_id)+".png")
 
 
-    return None
+    return pBB
 
 def openPower(map_id,map_type='B'): 
     """ Function to read in Power FITS file saved in createMap process.
@@ -135,7 +138,80 @@ if __name__=='__main__':
      # Display progress bar with tqdm
      r = list(tqdm.tqdm(p.imap(createMap,file_ids),total=len(file_ids)))
 
-def RescaledPlot(map_id,map_size=10,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=1000,l_step=100,returnMap=False):
+
+def MakePower(map_id,map_size=10,map_type='B'):
+    """ Function to create 2D power map of the correct type (i.e. B,E or T). Returns this map. IN: map_type"""
+    import numpy as np
+    import flipperPol as fp
+    import os
+
+    # Input map directory:
+    if map_size==10:
+        inDir='/data/ohep2/sims/simdata/'
+    elif map_size==5:
+    	inDir='/data/ohep2/sims/5deg/'
+    elif map_size==3:
+    	inDir='/data/ohep2/sims/3deg/'
+    else: 
+    	raise Exception('Incorrect Map Size')
+   
+    # Read in maps from file
+    Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+    Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
+    Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+    Maskmap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
+
+    # Define mod(l) and ang(l) maps needed for fourier transforms
+    modL,angL=fp.fftPol.makeEllandAngCoordinate(Tmap) # choice of map is arbitary
+
+    # Create pure T,E,B maps using 'hybrid' method to minimize E->B leakage
+    fT,fE,fB=fp.fftPol.TQUtoPureTEB(Tmap,Qmap,Umap,Maskmap,modL,angL,method='hybrid')
+
+    # Transform these maps into power space
+    TT,_,_,_,_,EE,_,_,BB=fp.fftPol.fourierTEBtoPowerTEB(fT,fE,fB,fT,fE,fB)
+    # (remainder are cross-maps)
+
+    # Define type of map used:
+    if map_type=='B':
+        return BB
+    elif map_type=='E':
+        return EE
+    elif map_type=='T':
+        return TT
+
+def MapSlope(Pmap,l_min,l_max,l_step,returnFit=False):
+    """ Compute slope of power spectrum of given map in the [l_min,l_max] range, using a binning of l_step. Returns power-law slope and amplitude, with covariance matrix. returnFit => Boolean - whether to return bin widths and amplitude+error"""
+
+    import numpy as np
+    from scipy.optimize import curve_fit
+    
+    # Define arrays
+    l_bin = []
+    pow_mean = []
+    pow_std = []
+
+    # Compute power
+    for l in np.arange(l_min,l_max,l_step):
+        mean,std,pix=Pmap.meanPowerInAnnulus(l,l+l_step)
+        pow_mean.append(mean)
+        pow_std.append(std)
+        l_bin.append(l+0.5*l_step)
+
+    # Compute the best-fit power index in this range
+   
+
+    param,covariance=curve_fit(pow_model,l_bin,pow_mean,sigma=pow_std)
+    slope=param[1] # model -slope
+    A=param[0] # amplitude
+    if returnFit:
+        return slope,A,covariance,l_bin,pow_mean,pow_std
+    else:
+        return slope,A,covariance
+
+def pow_model(x,A,slope): #(predicted power model)
+    return A*x**(-slope)
+
+def RescaledPlot(map_id,map_size=5,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=1000,l_step=100,returnMap=False):
     """ Create + plot the power map rescaled by a factor of l^{slope} where slope is found from radially binning the power spectrum in a specified range.
 
     NB: This can also plot unscaled plots using rescale=False
@@ -156,63 +232,29 @@ def RescaledPlot(map_id,map_size=10,map_type='B',rescale=True,show=False,save=Tr
     """
 
     import numpy as np
-    import flipperPol as fp
+    #import flipperPol as fp
     import os
     from scipy.optimize import curve_fit
 
-    # Define output directory
-    outDir = '/data/ohep2/RescaledPlots/'#'3deg/'#'/data/ohep2/RescaledPlots/'
+    
+    # Output map directory:
+    if map_size==10:
+        outDir='/data/ohep2/RescaledPlots/'
+    elif map_size==5:
+    	outDir='/data/ohep2/RescaledPlots/5deg/'
+    elif map_size==3:
+    	outDir='/data/ohep2/RescaledPlots/3deg/'
+    else: 
+    	raise Exception('Incorrect Map Size')
+    
     if not os.path.exists(outDir):
         os.makedirs(outDir)
-
-    # Input map directory:
-    inDir='/data/ohep2/sims/simdata/'#3deg/'#simdata/'
+  
+    # Create power map
+    Pmap=MakePower(map_id,map_size=map_size,map_type=map_type)
     
-    # Read in maps from file
-    Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
-    Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
-    Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
-    Maskmap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
-
-    # Define mod(l) and ang(l) maps needed for fourier transforms
-    modL,angL=fp.fftPol.makeEllandAngCoordinate(Tmap) # choice of map is arbitary
-
-    # Create pure T,E,B maps using 'hybrid' method to minimize E->B leakage
-    fT,fE,fB=fp.fftPol.TQUtoPureTEB(Tmap,Qmap,Umap,Maskmap,modL,angL,method='hybrid')
-
-    # Transform these maps into power space
-    TT,_,_,_,_,EE,_,_,BB=fp.fftPol.fourierTEBtoPowerTEB(fT,fE,fB,fT,fE,fB)
-    # (remainder are cross-maps)
-
-    # Define type of map used:
-    if map_type=='B':
-        Pmap=BB
-    elif map_type=='E':
-        Pmap=EE
-    elif map_type=='T':
-        Pmap=TT
-    else:
-        raise Exception('Incorrect Map Type {T,E,B} only')
-
     if rescale:
-        # Define arrays
-        l_bin = []
-        pow_mean = []
-        pow_std = []
-
-        # Compute power
-        for l in np.arange(l_min,l_max,l_step):
-            mean,std,pix=Pmap.meanPowerInAnnulus(l,l+l_step)
-            pow_mean.append(mean)
-            pow_std.append(std)
-            l_bin.append(l+0.5*l_step)
-
-        # Compute the best-fit power index in this range
-        def pow_model(x,A,slope): #(predicted power model)
-            return A*x**(-slope)
-        param,covariance=curve_fit(pow_model,l_bin,pow_mean,sigma=pow_std)
-        slope=param[1] # model -slope
-        A=param[0] # amplitude
+        slope,A,covariance,l_bin,pow_mean,pow_std=MapSlope(Pmap,l_min,l_max,l_step,returnFit=True)
         print('Slope '+str(slope)+' +/- '+str(covariance[1,1]))
 
         # Plot + save fitting plot in log space
@@ -254,7 +296,7 @@ def RescaledPlot(map_id,map_size=10,map_type='B',rescale=True,show=False,save=Tr
             Pmap.plot(log=True,zoomUptoL=2000,pngFile=outFile,title=str(map_type)+str(map_id)+' Map with no scaling applied')
 
     if returnMap:
-        return Pmap,slope
+        return Pmap,slope,A
     else:
         return None
     

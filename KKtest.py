@@ -6,6 +6,8 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
     lMin,lMax= fitting range of l
     slope,map -> best fit slope and map if already estimated (recomputed if None)
     returnSlope = whether to return slope in addition
+
+    NB: This works for arbitrary map 
     
     Outputs:
     p_str,p_ang -> polarisation strength and angle
@@ -17,7 +19,12 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
         # Create rescaled map and slope
         print 'Creating new map'
         map,slope,_=PowerMap.RescaledPlot(map_id,map_size=map_size,l_min=lMin,l_max=lMax,l_step=l_step,rescale=True,show=False,showFit=False,returnMap=True)
-    
+  
+    if map!=None and slope==None:
+        # Compute slope of map only
+        slope,_,_=PowerMap.MapSlope(map,lMin,lMax,l_step)
+
+        
     # print('Using map size of %s' %(map_size))
 
 
