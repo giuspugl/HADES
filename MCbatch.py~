@@ -1,0 +1,35 @@
+if __name__=='__main__':
+     """ Batch process to use all available cores to compute the KK estimators and Gaussian errors using the est_and_err function im MCerror
+    Inputs are min and max file numbers. Output is saved as npy file"""
+
+     import tqdm
+     import sys
+     import numpy as np
+     import multiprocessing as mp
+     from hades.MCerror import est_and_err
+
+     # Default parameters
+     nmin = 0
+     nmax = 3485
+     cores = 7
+
+     # Parameters if input from the command line
+     if len(sys.argv)>=2:
+         nmin = int(sys.argv[1])
+     if len(sys.argv)>=3:
+         nmax = int(sys.argv[2])
+     if len(sys.argv)==4:
+         cores = int(sys.argv[3])
+
+     # Start the multiprocessing
+     p = mp.Pool(processes=cores)
+     file_ids = np.arange(nmin,nmax+1)
+     
+
+     # Display progress bar with tqdm
+     r = list(tqdm.tqdm(p.imap(est_and_err,file_ids),total=len(file_ids)))
+     
+     # Save output
+     np.save('MCestimates3deg.npy',np.array(r))
+
+
