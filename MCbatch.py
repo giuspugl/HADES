@@ -10,8 +10,8 @@ if __name__=='__main__':
 
      # Default parameters
      nmin = 0
-     nmax = 3485
-     cores = 7
+     nmax = 1399#3484
+     cores = 42
 
      # Parameters if input from the command line
      if len(sys.argv)>=2:
@@ -30,6 +30,6 @@ if __name__=='__main__':
      r = list(tqdm.tqdm(p.imap(est_and_err,file_ids),total=len(file_ids)))
      
      # Save output
-     np.save('MCestimates3deg.npy',np.array(r))
+     np.save('MCestimates5deg.npy',np.array(r))
 
 

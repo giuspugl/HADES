@@ -1,7 +1,7 @@
 from flipper import *
 import numpy as np
 
-def est_and_err(map_id,map_size=3,N_sims=100,l_step=100):
+def est_and_err(map_id,map_size=5,N_sims=100,l_step=50):
     """ Compute estimated angle, amplitude and polarisation of map compared to Gaussian error from MC simulations.
     Input - map_id, map_size
     N_sims = no. of MC sims
@@ -37,8 +37,8 @@ def est_and_err(map_id,map_size=3,N_sims=100,l_step=100):
 
     # Use KK estimators to find best estimate of angle and polarisation strength
     #print('Computing best KK estimators')
-    p_str,p_ang,A=angle_estimator(map_id,map_size,map=Bmap,l_step=l_step,lMin=l_min,lMax=l_max,slope=slope)
-    best_preds=[p_str,p_ang,A]
+    p_str,p_ang,A,fs,fc,Afs,Afc=angle_estimator(map_id,map_size,map=Bmap,l_step=l_step,lMin=l_min,lMax=l_max,slope=slope)
+    best_preds=[p_str,p_ang,A,fs,fc,Afs,Afc]
     #print l_bin,pow_mean
     
     # Compute MC statistics for errors
@@ -81,7 +81,7 @@ def error_wrapper(map_id,l_bin,Cl,map_size=3,N_sims=100,l_step=50,slope=None):
     window=liteMap.liteMapFromFits(indir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
 
     # Initialise arrays
-    angs,strs,amps=[],[],[]
+    angs,strs,amps,fs,fc,Afs,Afc=[],[],[],[],[],[],[]
     
     # Compute N_sims realisations:
     for n in range(N_sims):
@@ -89,17 +89,23 @@ def error_wrapper(map_id,l_bin,Cl,map_size=3,N_sims=100,l_step=50,slope=None):
         #	print('%s out of %s completed' %(n,N_sims))
           
         # Compute estimators
-        p_str,p_ang,A_est,l_bin,Cl=error_estimator(map_id,map_size,l_step,Tmap,window,l_bin,Cl,slope)
+        p_str,p_ang,A_est,fs_est,fc_est,Afs_est,Afc_est,l_bin,Cl=error_estimator(map_id,map_size,l_step,Tmap,window,l_bin,Cl,slope)
         strs.append(p_str) # polarisation strength
         amps.append(A_est) # isotropic amplitude
         angs.append(p_ang) # polarisation angles
+        fs.append(fs_est) # f_s parameter
+        fc.append(fc_est) # f_c parameter
+        Afc.append(Afc_est) # these are probably the unbiased quantities
+        Afs.append(Afs_est)
 
     # Compute mean and standard deviations
-    means=[np.mean(strs),np.mean(angs),np.mean(amps)]
-    stdevs=[np.std(strs),np.std(angs),np.std(amps)]
+    means=[np.mean(strs),np.mean(angs),np.mean(amps),np.mean(fs),np.mean(fc),\
+    np.mean(Afs),np.mean(Afc)]
+    stdevs=[np.std(strs),np.std(angs),np.std(amps),np.std(fs),np.std(fc),\
+    np.std(Afs),np.mean(Afc)]
     
     # Catch any errors:
-    if np.isnan(stdevs).any(): # double l range 
+    if np.isnan(stdevs).any(): 
     	print 'err'
     return means,stdevs 
 
@@ -124,7 +130,7 @@ def error_estimator(map_id,map_size,l_step,Tmap,window,l_bin,Cl,slope):
     slope is fiducial B-mode binned map slope
 
 
-    Out: strength, angle and amplitude from KK estimator
+    Out: strength, angle and amplitude,f_s,f_c,Af_s,Af_c parameters from KK estimator
     """
     import numpy as np
     # Compute random map from the given power spectrum
@@ -142,9 +148,9 @@ def error_estimator(map_id,map_size,l_step,Tmap,window,l_bin,Cl,slope):
     MCpower=Power2DMap(MCmap,window)
     # Now apply statistical estimator - this RECOMPUTES slope for each
     from .KKtest import angle_estimator
-    p_str,p_ang,A_est=angle_estimator(map_id,map_size=map_size,l_step=l_step,lMin=l_min,lMax=l_max,map=MCpower,slope=slope)
+    p_str,p_ang,A_est,fs_est,fc_est,Afs_est,Afc_est=angle_estimator(map_id,map_size=map_size,l_step=l_step,lMin=l_min,lMax=l_max,map=MCpower,slope=slope)
 
-    return p_str,p_ang,A_est,l_bin,Cl
+    return p_str,p_ang,A_est,fs_est,fc_est,Afs_est,Afc_est,l_bin,Cl
 
 def Power2DMap(Bmap,window):
     """ Compute 2D power map of Bmode map from real space map + window function. This is taken from fftPol code, just for only one map"""
@@ -167,17 +173,72 @@ def plot_est_and_err(map_size):
     # Read in data
     data=np.load('MCestimates'+str(map_size)+'deg.npy')
     
-    pol_str=[d[0][0] for d in data] # polarisation strength
-    pol_ang=[d[1][0] for d in data] # polarisation angle
-    str_err=[d[0][1] for d in data] # strength gaussian error
-    ang_err=[d[1][1] for d in data] # angle gaussian error
-    
-    # Compute significances
-    sig_str = [d[0][0]/d[0][1] for d in data] # strength
-    sig_ang= [d[1][0]/d[1][1] for d in data] # angle
     
     N = len(data)#  no. patches
     
+    # Estimator values
+    est_str=[d[0][0] for d in data] # polarisation strength
+    est_ang=[d[1][0] for d in data] # polarisation angle
+    est_A=[d[2][0] for d in data] # monopole amplitude
+    est_fs=[d[3][0] for d in data] # f_s anisotropy
+    est_fc=[d[4][0] for d in data] # f_c anisotropy
+    est_Afs=[d[5][0] for d in data] # Af_s anisotropy
+    est_Afc=[d[6][0] for d in data]
+    
+    
+    # Gaussian errors
+    err_str=[d[0][1] for d in data] # strength gaussian error
+    err_ang=[d[1][1] for d in data] # angle gaussian error
+    err_A=[d[2][1] for d in data] # Amplitude gaussian error
+    err_fs=[d[3][1] for d in data] # fs gaussian error -> unbiased?
+    err_fc=[d[4][1] for d in data] # fc gaussian error
+    err_Afs=[d[5][1] for d in data] # Afs Gaussian error -> unbiased?
+    err_Afc=[d[6][1] for d in data] # Afc Gaussian error 
+    
+    # Gaussian means
+    mean_str=[d[0][2] for d in data]
+    mean_ang=[d[1][2] for d in data]
+    mean_A=[d[2][2] for d in data]
+    mean_fs=[d[3][2] for d in data]
+    mean_fc=[d[4][2] for d in data] 
+    mean_Afs=[d[5][2] for d in data]
+    mean_Afc=[d[6][2] for d in data]
+    
+    # log data
+    est_log_A=[np.log10(A) for A in est_A]
+    
+    # Compute estimate of strength without zero error
+    unbiased_str=[est_str[i]-mean_str[i] for i in range(len(est_str))]
+    
+    # Compute significances for Afs,Afc data
+    sig_Afs=[est_Afs[i]/err_Afs[i] for i in range(N)]
+    sig_Afc=[est_Afc[i]/err_Afc[i] for i in range(N)]
+    
+    # Compute unbiased errors in fs,fc
+    err_fs_from_Afs=[np.sqrt((est_fs[i]*err_Afs[i]/est_Afs[i])**2+(est_fs[i]*err_A[i]/est_A[i])**2) for i in range(N)]
+    err_fc_from_Afc=[np.sqrt((est_fc[i]*err_Afc[i]/est_Afc[i])**2+(est_fc[i]*err_A[i]/est_A[i])**2) for i in range(N)]
+    
+    # Compute significances for fs, fc data
+    
+    sig_fs = [est_fs[i]/err_fs[i] for i in range(N)] 
+    sig_fc= [est_fc[i]/err_fc[i] for i in range(N)] 
+    
+    # Next compute errors on angle and unbiased strength
+    
+    def amplitude_err(fs,fc,sig_fs,sig_fc): # error in amplitude 
+    	return np.sqrt(((sig_fs*fs)**2+(sig_fc*fc)**2)/(fs**2+fc**2))
+    
+    def angle_err(fs,fc,sig_fs,sig_fc): # error in angle in degrees
+    	return 1./4*np.sqrt(((fs*sig_fc)**2+(fc*sig_fs)**2)/(fs**2+fc**2))*180./np.pi
+    
+    # These are the unbiased estimates	
+    unbiased_err_str = [amplitude_err(est_fs[i],est_fc[i],err_fs[i],err_fc[i]) for i in range(N)]
+    unbiased_err_ang = [angle_err(est_fs[i],est_fc[i],err_unbiased_fs[i],err_unbiased_fc[i]) for i in range(N)]
+    
+    # Compute significance of strength and angle
+    sig_unbiased_str = [est_str[i]/unbiased_err_str[i] for i in range(N)]
+    sig_unbiased_ang = [est_ang[i]/unbiased_err_ang[i] for i in range(N)]
+     
     # Also read in coordinates of patches
     if map_size==10:
         coords=np.loadtxt('/data/ohep2/sims/simdata/fvsmapRAsDecs.txt')
@@ -207,25 +268,50 @@ def plot_est_and_err(map_size):
 
     # Make output directory
     import os
-    outDir='/data/ohep2/SkyPolMaps/'
+    outDir='/data/ohep2/SkyPolMapsUnbiased/'
     
     if not os.path.exists(outDir):
     	os.mkdir(outDir)
     	
     # Plot maps
-    datSet=[pol_str,pol_ang,str_err,ang_err,sig_str,sig_ang] # all datasets
-    names=['Polarisation Strength', 'Polarisation Angle', \
-    'Strength Gaussian Error','Angle Gaussian Error',
-    'Polarisation Strength Significance','Polarisation Angle Significance']
-    fileStr=['pol_str','pol_ang','str_err','ang_err','sig_str','sig_ang']
+    datSet=[est_str,est_ang,est_A,est_fs,est_fc,\
+    sig_fs,sig_fc,\
+    sig_unbiased_str,sig_unbiased_ang,unbiased_err_str,unbiased_err_ang,\
+    unbiased_str,mean_str,est_log_A]
+    
+    #datSet=[pol_str,pol_ang,str_err,ang_err,sig_str,sig_ang] # all datasets
+    names=['Polarisation Strength','Polarisation Angle','Monopole Amplitude',\
+    'f_s','f_c','f_s Significance','f_c Significance',\
+    'Unbiased Strength Significance','Unbiased Angle Significance',\
+    'Unbiased Strength Error','Unbiased Angle Error',\
+    'Strength - mean(isotropic strength)','Mean Isotropic Strength','log Amplitude Estimation']
+    #names=['Polarisation Strength', 'Polarisation Angle', \
+    #'Strength Gaussian Error','Angle Gaussian Error',
+    #'Polarisation Strength Significance','Polarisation Angle Significance']
+    fileStr=['est_str','est_ang','est_A','est_fs','est_fc','sig_fs','sig_fc',\
+    'sig_unbiased_str','sig_unbiased_ang','unbiased_err_str','unbiased_err_ang',\
+    'str_mean_sub','mean_iso_str','est_log_A']
+    #fileStr=['pol_str','pol_ang','str_err','ang_err','sig_str','sig_ang']
+    
+    if map_size==5:
+    	s_dot=50 # size of point in plot
+    elif map_size==3:
+    	s_dot=30
     
     for i in range(len(datSet)):
         fig=plt.figure()
     	fig.add_subplot(111,projection='mollweide')
-    	plt.scatter(ra_deg.radian,dec_deg.radian,c=datSet[i],marker='o',s=30)
+   	#if i == 2:
+   	#	plt.scatter(ra_deg.radian,dec_deg.radian,c=datSet[i],marker='o',vmax=0.5,s=s_dot)
+   	#elif i ==4:
+   	#	plt.scatter(ra_deg.radian,dec_deg.radian,c=datSet[i],marker='o',vmax=10,s=s_dot)
+   	#else:
+    	plt.scatter(ra_deg.radian,dec_deg.radian,c=datSet[i],marker='o',s=s_dot)
     	plt.colorbar()
     	plt.axis('off')
     	plt.title(names[i])
-    	plt.savefig(outDir+str(map_size)+'deg_'+fileStr[i]+'.png')
+    	plt.savefig(outDir+str(map_size)+'deg_'+fileStr[i]+'.png',bbox_inches='tight')
     	plt.clf()
+    	plt.close()
+
 

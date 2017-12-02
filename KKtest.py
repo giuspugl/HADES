@@ -1,5 +1,5 @@
 def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,map=None,returnSlope=False):
-    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle.
+    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
     Inputs: map_id
     map_size = 3,5,10 -> width of map in degrees
     l_step (how large to bin data)
@@ -51,17 +51,19 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
                 Afs_num+=map.powerMap[i,j]/fiducial*np.sin(4*ang)
                 Afs_den+=(np.sin(4*ang)**2)
     A=A_num/A_den # A estimator
-    fs=Afs_num/Afs_den / A # fs estimation
-    fc=Afc_num/Afc_den / A
+    Afs=Afs_num/Afs_den
+    Afc=Afc_num/Afc_den
+    fs=Afs / A # fs estimation
+    fc=Afc / A
 
     # Compute polarisation strength + angle
     p_str = np.sqrt(fs**2+fc**2) # Strength
     p_ang=0.25*np.arctan(fs/fc)*180/np.pi # in degrees (0 to 45)
 
     if returnSlope:
-        return p_str,p_ang,A,slope
+        return p_str,p_ang,fs,fc,Afs,Afc,A,slope
     else:
-        return p_str,p_ang,A
+        return p_str,p_ang,A,fs,fc,Afs,Afc
 
 if __name__=='__main__':
     """ Batch process using all available cores to compute the angle and polariasation strengths of a map using the angle_estimator code above"""

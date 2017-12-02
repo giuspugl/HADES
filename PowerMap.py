@@ -211,7 +211,7 @@ def MapSlope(Pmap,l_min,l_max,l_step,returnFit=False):
 def pow_model(x,A,slope): #(predicted power model)
     return A*x**(-slope)
 
-def RescaledPlot(map_id,map_size=5,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=2000,l_step=50,returnMap=False):
+def RescaledPlot(map_id,map_size=3,map_type='B',rescale=True,show=False,save=True,showFit=False,saveFit=True,l_min=100,l_max=2000,l_step=100,returnMap=False):
     """ Create + plot the power map rescaled by a factor of l^{slope} where slope is found from radially binning the power spectrum in a specified range.
 
     NB: This can also plot unscaled plots using rescale=False

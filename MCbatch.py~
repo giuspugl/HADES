@@ -10,8 +10,8 @@ if __name__=='__main__':
 
      # Default parameters
      nmin = 0
-     nmax = 3485
-     cores = 7
+     nmax = 3484
+     cores = 42
 
      # Parameters if input from the command line
      if len(sys.argv)>=2:

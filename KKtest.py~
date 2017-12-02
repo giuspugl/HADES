@@ -1,5 +1,5 @@
 def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,map=None,returnSlope=False):
-    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle.
+    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
     Inputs: map_id
     map_size = 3,5,10 -> width of map in degrees
     l_step (how large to bin data)
@@ -19,10 +19,7 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
         # Create rescaled map and slope
         print 'Creating new map'
         map,slope,_=PowerMap.RescaledPlot(map_id,map_size=map_size,l_min=lMin,l_max=lMax,l_step=l_step,rescale=True,show=False,showFit=False,returnMap=True)
-
-    if map==None and slope!=None:
-    # Compute the map not the slope
-    
+  
     if map!=None and slope==None:
         # Compute slope of map only
         slope,_,_=PowerMap.MapSlope(map,lMin,lMax,l_step)
@@ -62,9 +59,9 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
     p_ang=0.25*np.arctan(fs/fc)*180/np.pi # in degrees (0 to 45)
 
     if returnSlope:
-        return p_str,p_ang,A,slope
+        return p_str,p_ang,fs,fc,A,slope
     else:
-        return p_str,p_ang,A
+        return p_str,p_ang,A,fs,fc
 
 if __name__=='__main__':
     """ Batch process using all available cores to compute the angle and polariasation strengths of a map using the angle_estimator code above"""
