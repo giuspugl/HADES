@@ -1,4 +1,7 @@
-def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,map=None,returnSlope=False):
+from .params import BICEP
+a=BICEP()
+
+def angle_estimator(map_id,map_size=a.map_size,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,slope=None,map=None,returnSlope=False):
     """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
     Inputs: map_id
     map_size = 3,5,10 -> width of map in degrees
@@ -22,6 +25,7 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
   
     if map!=None and slope==None:
         # Compute slope of map only
+        print 'recompute slope'
         slope,_,_=PowerMap.MapSlope(map,lMin,lMax,l_step)
 
         
@@ -33,10 +37,6 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
     Afc_num,Afc_den=0,0
     Afs_num,Afs_den=0,0
 
-    # Define fitting range
-    lMax=2000
-    lMin=100
-    
     # Construct estimators over all pixels
     for i in range(map.Ny):
         for j in range(map.Nx):
@@ -66,7 +66,8 @@ def angle_estimator(map_id,map_size=5,l_step=50,lMin=100,lMax=2000,slope=None,ma
         return p_str,p_ang,A,fs,fc,Afs,Afc
 
 if __name__=='__main__':
-    """ Batch process using all available cores to compute the angle and polariasation strengths of a map using the angle_estimator code above"""
+    """ Batch process using all available cores to compute the angle and polariasation strengths of a map using the angle_estimator code above. 
+    DEPRACATED"""
 
     # Import modules
     import tqdm
@@ -107,7 +108,9 @@ if __name__=='__main__':
     
 def reconstructor(map_size=10):
     """ Plot the angle and power on a spherical grid for all patches
-    Input: map_size = 3,5,10"""
+    Input: map_size = 3,5,10
+    DEPRACATED 
+    """
     import numpy as np
 
     # Read in data

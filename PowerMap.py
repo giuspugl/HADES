@@ -1,4 +1,6 @@
 from flipper import *
+from .params import BICEP
+a=BICEP()
 
 def createMap(map_id,warnings=False,plotPNG=True,Fits=False):
     """ Create the B-,E-,T- space 2D power maps from input simulation maps. Simulation maps are those of Vansyngel+16 provided and reduced by Alex van Engelen. This uses the flipperPol hybrid scheme to minimise E-B leakage in B-maps.
@@ -139,22 +141,24 @@ if __name__=='__main__':
      r = list(tqdm.tqdm(p.imap(createMap,file_ids),total=len(file_ids)))
 
 
-def MakePower(map_id,map_size=10,map_type='B'):
+def MakePower(map_id,map_size=a.map_size,map_type='B'):
     """ Function to create 2D power map of the correct type (i.e. B,E or T). Returns this map. IN: map_type"""
     import numpy as np
     import flipperPol as fp
     import os
 
     # Input map directory:
-    if map_size==10:
-        inDir='/data/ohep2/sims/simdata/'
-    elif map_size==5:
-    	inDir='/data/ohep2/sims/5deg/'
-    elif map_size==3:
-    	inDir='/data/ohep2/sims/3deg/'
-    else: 
-    	raise Exception('Incorrect Map Size')
-   
+    if a.root_dir=='/data/ohep2/sims/':
+    	if map_size==10:
+    		inDir='/data/ohep2/sims/simdata/'
+    	elif map_size==5:
+    		inDir='/data/ohep2/sims/5deg/'
+    	elif map_size==3:
+    		inDir='/data/ohep2/sims/3deg/'
+    	else: 
+    		raise Exception('Incorrect Map Size')
+    else:
+   	inDir=a.root_dir+str(map_size)+'deg/'
     # Read in maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
     Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
@@ -200,7 +204,7 @@ def MapSlope(Pmap,l_min,l_max,l_step,returnFit=False):
     # Compute the best-fit power index in this range
    
 
-    param,covariance=curve_fit(pow_model,l_bin,pow_mean,sigma=pow_std)
+    param,covariance=curve_fit(pow_model,l_bin,pow_mean,sigma=pow_std,absolute_sigma=True)
     slope=param[1] # model -slope
     A=param[0] # amplitude
     if returnFit:
@@ -238,14 +242,17 @@ def RescaledPlot(map_id,map_size=3,map_type='B',rescale=True,show=False,save=Tru
 
     
     # Output map directory:
-    if map_size==10:
-        outDir='/data/ohep2/RescaledPlots/'
-    elif map_size==5:
-    	outDir='/data/ohep2/RescaledPlots/5deg/'
-    elif map_size==3:
-    	outDir='/data/ohep2/RescaledPlots/3deg/'
-    else: 
-    	raise Exception('Incorrect Map Size')
+    if a.root_dir=='/data/ohep2/sims/':
+	if map_size==10:
+        	outDir='/data/ohep2/RescaledPlots/'
+    	elif map_size==5:
+    		outDir='/data/ohep2/RescaledPlots/5deg/'
+    	elif map_size==3:
+    		outDir='/data/ohep2/RescaledPlots/3deg/'
+    	else: 
+    		raise Exception('Incorrect Map Size')
+    else:
+    	outDir=a.root_dir+'RescaledPlots/'+str(map_size)+'deg/'
     
     if not os.path.exists(outDir):
         os.makedirs(outDir)
