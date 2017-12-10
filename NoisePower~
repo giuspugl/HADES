@@ -1,0 +1,7 @@
+from .params import BICEP
+a=BICEP()
+
+from flipper import *
+import numpy as np
+
+def noise_est_and_err()

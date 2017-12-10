@@ -1,0 +1,196 @@
+import numpy as np
+from hades.params import BICEP
+b=BICEP()
+
+def create_data(NoisePowerLists=b.NoisePowerLists,setting=b.ComparisonSetting):
+	""" Script to compute KK estimated anisotropies for the BICEP field using different noise_powers or FWHM.
+	Powers are defined in NoisePowerLists. (in microK-arcmin)
+	Setting input defines whether to compare 'FWHM' or 'noise_power'
+	
+	Output is .npy files in NoiseAnalysis subfolder.
+	"""
+	import os
+	
+	if setting=='noise_power':
+		Initial=str(b.noise_power)
+		comp_list=b.NoisePowerLists
+	elif setting=='FWHM':
+		Initial=str(b.FWHM)
+		comp_list=b.FWHM_lists
+	else:
+		raise Exception('Setting must be noise_power or FWHM')
+	
+	# Iterate over list
+	for n in range(len(comp_list)):
+		
+		## First edit parameter file to change the noise power
+		with open('hades/params.py','r') as f:
+			filedata=f.read()
+			f.close()
+			
+		# Define strings to change:
+		if n==0:
+			old_str=str(setting)+ ' = '+Initial
+		else:
+			old_str=str(setting)+' = %f' %comp_list[n-1]
+		new_str=str(setting)+' = %f' %comp_list[n]
+		
+		newdata = filedata.replace(old_str,new_str)
+		
+		with open('hades/params.py','w') as f:
+			f.write(newdata)
+			f.close()
+			
+		print "Computing sample %s of %s" %(n+1,len(comp_list))
+		
+		# Compute the estimators 
+		os.system('python hades/NoiseBatch.py')
+	
+	print "Process complete"
+	
+def reconstructor(map_size=b.map_size,sep=b.sep,setting=b.ComparisonSetting):
+	""" Reconstruct and analyse the anisotropy data generated in the create_data() script,
+	for different noise powers."""
+	
+	# List of noise powers tested
+	if setting=='FWHM':
+		comp_list=b.FWHM_lists
+	elif setting=='noise_power':
+		comp_list=b.NoisePowerLists
+	
+	# Empty lists
+	logA,fs,fc,frac,ang=[],[],[],[],[]
+	Asig,fs_sig,fc_sig=[],[],[]
+	
+	# Input data
+	for n in range(len(comp_list)):
+		# load data
+		if setting=='FWHM':
+			dat=np.load(b.root_dir+'%sdeg%s/NoiseAnalysis/FWHM%.2f.npy' %(map_size,sep,comp_list[n]))
+		else:
+			dat=np.load(b.root_dir+'%sdeg%s/NoiseAnalysis/NoisePower%.2f.npy' %(map_size,sep,comp_list[n]))
+		N=len(dat)
+		logA.append([np.log10(d[0][0]) for d in dat])
+		fs.append([d[1][0] for d in dat])
+		fc.append([d[2][0] for d in dat])
+		Asig.append([d[0][0]/d[0][1] for d in dat])
+		fs_sig.append([d[1][0]/d[1][1] for d in dat])
+		fc_sig.append([d[2][0]/d[2][1] for d in dat])
+		ang.append([0.25*np.arctan(fs[n][i]/fc[n][i])*180./np.pi for i in range(N)])
+		frac.append([np.sqrt(fs[n][i]**2+fc[n][i]**2) for i in range(N)])
+		
+	# Load in coordinates
+	from .NoisePower import good_coords
+	ra,dec=good_coords(map_size,sep,N)
+	
+	# Output directory
+	import os
+	outDir=b.root_dir+'%sdeg%sComparison/' %(map_size,sep)
+	if not os.path.exists(outDir):
+		os.mkdir(outDir)
+		
+	# Define max/min of scale bar:
+	def max_min(dat_set):
+		""" Return max/min of dataset across all powers"""
+		maxm=max([max(d) for d in dat_set])
+		minm=min([min(d) for d in dat_set])
+		return maxm,minm
+	
+	## Make plots
+	dat_sets=[logA,fs,fc,Asig,fs_sig,fc_sig,ang,frac]
+	names=['log Monopole Amplitude', 'fs', 'fc','Monopole Amplitude Significance',\
+	'fs Significance','fc Significance','Polarisation Angle','Anisotropy Fraction']
+	file_str=['logA','fs','fc','Asig','fs_sig','fc_sig','ang','frac']
+	
+	import matplotlib.pyplot as plt
+	mean_sig_fs,std_sig_fs,mean_sig_fc,std_sig_fc=[],[],[],[]
+	for n in range(len(comp_list)):
+		for i in range(len(dat_sets)):
+			plt.figure()
+			plt.scatter(ra,dec,c=dat_sets[i][n],marker='o',s=80,vmax=max_min(dat_sets[i])[0],vmin=max_min(dat_sets[i])[1])
+			plt.xlabel('RA')
+			plt.ylabel('Dec')
+			plt.colorbar()
+			plt.title(names[i]+' - %s = %.2f' %(setting,comp_list[n]))
+			plt.savefig(outDir+file_str[i]+'_'+setting+'_%.2f.png' %comp_list[n])
+			plt.clf()
+			plt.close()
+		#print "Mean mod fs significance for noise_power = %.2f is %.3f +/- %.3f" %(n_pow,np.mean(np.abs(fs_sig[n])),np.std(np.abs(fs_sig[n])))
+		#print "Mean mod fc significance for noise_power = %.2f is %.3f +/- %.3f" %(n_pow,np.mean(np.abs(fc_sig[n])),np.std(np.abs(fc_sig[n])))
+		mean_sig_fs.append(np.mean(np.abs(fs_sig[n])))
+		mean_sig_fc.append(np.mean(np.abs(fc_sig[n])))
+		std_sig_fs.append(np.std(np.abs(fs_sig[n])))
+		std_sig_fc.append(np.std(np.abs(fc_sig[n])))
+		
+	np.savez(outDir+setting+'_significances.npz',mean_fs=mean_sig_fs,mean_fc=mean_sig_fc,std_fs=std_sig_fs,std_fc=std_sig_fc)
+	
+	
+def frac_err(setting=b.ComparisonSetting,map_size=b.map_size,sep=b.sep):
+	""" Routine to compute and plot fractional errors in maps.
+	Inputs: setting -> use noise_power or FWHM errors
+	map_size, map separation
+	Outputs: plots in 3deg0.5Comparison/ folder
+	"""
+	if setting=='FWHM':
+		noise_param=b.FWHM_lists
+	elif setting=='noise_power':
+		noise_param=NoisePowerLists
+	else: 
+		raise Exception('ComparisonSetting Error')
+		
+	
+	#medians,his,lows=np.zeros(3),np.zeros(3),np.zeros(3)
+	
+	# First load in datasets
+	for n in range(len(noise_param)):
+		if setting=='FWHM':
+			dat=np.load(b.root_dir+'%sdeg%s/NoiseAnalysis/FWHM%.2f.npy' %(map_size,sep,noise_param[n]))
+		else:
+			dat=np.load(b.root_dir+'%sdeg%s/NoiseAnalysis/NoisePower%.2f.npy' %(map_size,sep,noise_param[n]))
+		N=len(dat)
+		logA=[d[0][0] for d in dat]
+		fs=[d[1][0] for d in dat]
+		fc=[d[2][0] for d in dat]
+		
+		if n==0:
+			best_fs=fs
+			best_fc=fc
+			best_logA=logA
+			
+			# Load coords
+			from .NoisePower import good_coords
+			ra,dec=good_coords(map_size,sep,N)
+			import matplotlib.pyplot as plt
+			medians,his,lows=np.zeros((3,len(noise_param)-1)),np.zeros((3,len(noise_param)-1)),np.zeros((3,len(noise_param)-1))
+			
+		else:
+			err_fs=[float((fs[i]-best_fs[i])/best_fs[i]) for i in range(N)]
+			err_fc=[float((fc[i]-best_fc[i])/best_fc[i]) for i in range(N)]
+			err_logA=[float((logA[i]-best_logA[i])/best_logA[i]) for i in range(N)]
+			
+			dats=[err_fs,err_fc,err_logA]
+			strs=['err_fs','err_fc','err_logA']
+			#medians,his,lows=[],[],[]
+			for j in range(len(dats)):
+				plt.figure()
+				plt.scatter(ra,dec,c=np.array(dats[j]),s=80,marker='o',vmax=np.percentile(dats[j],95),vmin=np.percentile(dats[j],5))
+				plt.xlabel('RA')
+				plt.ylabel('Dec')
+				plt.title(strs[j]+' - %s = %.2f' %(setting,noise_param[n]))
+				plt.colorbar()
+				outDir=b.root_dir+'%sdeg%sComparison/' %(map_size,sep)
+				plt.savefig(outDir+strs[j]+'_%s_%.2f.png' %(setting,noise_param[n]))
+				plt.clf()
+				plt.close()
+				medians[j][n-1]=np.median(np.abs(dats[j]))
+				his[j][n-1]=np.percentile(np.abs(dats[j]),100-15.865)-np.median(np.abs(dats[j]))
+				lows[j][n-1]=np.median(np.abs(dats[j]))-np.percentile(np.abs(dats[j]),100-15.865)
+			
+			
+	
+	
+	np.savez(outDir+setting+'fsErrors.npz',med=medians[0],upper=his[0],lower=lows[0],params=noise_param)
+	np.savez(outDir+setting+'fcErrors.npz',med=medians[1],upper=his[1],lower=lows[1],params=noise_param)
+	np.savez(outDir+setting+'logAErrors.npz',med=medians[2],upper=his[2],lower=lows[2],params=noise_param)
+	
+

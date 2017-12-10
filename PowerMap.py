@@ -2,6 +2,8 @@ from flipper import *
 from .params import BICEP
 a=BICEP()
 
+import numpy as np
+
 def createMap(map_id,warnings=False,plotPNG=True,Fits=False):
     """ Create the B-,E-,T- space 2D power maps from input simulation maps. Simulation maps are those of Vansyngel+16 provided and reduced by Alex van Engelen. This uses the flipperPol hybrid scheme to minimise E-B leakage in B-maps.
     
@@ -117,7 +119,6 @@ if __name__=='__main__':
 
      import tqdm
      import sys
-     import numpy as np
      import multiprocessing as mp
 
      # Default parameters
@@ -143,7 +144,6 @@ if __name__=='__main__':
 
 def MakePower(map_id,map_size=a.map_size,map_type='B'):
     """ Function to create 2D power map of the correct type (i.e. B,E or T). Returns this map. IN: map_type"""
-    import numpy as np
     import flipperPol as fp
     import os
 
@@ -158,7 +158,7 @@ def MakePower(map_id,map_size=a.map_size,map_type='B'):
     	else: 
     		raise Exception('Incorrect Map Size')
     else:
-   	inDir=a.root_dir+str(map_size)+'deg/'
+   	inDir=a.root_dir+'%sdeg%s/' %(map_size,a.sep)
     # Read in maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
     Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
@@ -182,12 +182,35 @@ def MakePower(map_id,map_size=a.map_size,map_type='B'):
         return EE
     elif map_type=='T':
         return TT
+        
+def oneD_binning(powMap,lMin,lMax,l_step,binErr=False):
+	""" Compute the one-dimensional power spectrum of a given map from binning in annuli.
+	Inputs: powermap, min.max l and bin size.
+	binErr -> whether to return error in power from binning
+	Outputs: central l value, binned power, [binned power error] """
+	l_bin = np.arange(lMin,lMax,l_step) # binning positions
+	l_cen, bin_pow = [], [] 
+	if binErr:
+		bin_err=[]
+	
+	for i in range(len(l_bin)-1):
+		l_cen.append(0.5*(l_bin[i]+l_bin[i+1])) # central l-value
+		temp=powMap.meanPowerInAnnulus(l_bin[i],l_bin[i+1])
+		bin_pow.append(temp[0])
+		if binErr:
+			bin_err.append(temp[1])
+	
+	if binErr:
+		return l_cen, bin_pow, bin_err
+	else:
+		return l_cen, bin_pow
 
 def MapSlope(Pmap,l_min,l_max,l_step,returnFit=False):
     """ Compute slope of power spectrum of given map in the [l_min,l_max] range, using a binning of l_step. Returns power-law slope and amplitude, with covariance matrix. returnFit => Boolean - whether to return bin widths and amplitude+error"""
 
-    import numpy as np
     from scipy.optimize import curve_fit
+    
+    print 'DEPRACATED'
     
     # Define arrays
     l_bin = []
@@ -235,7 +258,6 @@ def RescaledPlot(map_id,map_size=3,map_type='B',rescale=True,show=False,save=Tru
     + fitting plot (if saveFit)
     """
 
-    import numpy as np
     #import flipperPol as fp
     import os
     from scipy.optimize import curve_fit
@@ -321,7 +343,6 @@ def AnisotropyPower(map_id,show=True,save=False,fitPlot=False):
     
     Output: plot (if show=True) + saved in /ProcMaps/Aniso as png (if save=True)
     """
-    import numpy as np
     aniso_path = '/data/ohep2/ProcMaps/Aniso/' # saving path
 
     # Create directory

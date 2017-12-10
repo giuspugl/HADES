@@ -3,7 +3,7 @@ a=BICEP()
 
 # Default parameters
 nmin = 0
-nmax = 6000#1399#3484
+nmax = 1e5#1399#3484
 cores = 42
 
 
@@ -28,7 +28,7 @@ if __name__=='__main__':
      # Compute map IDs with non-trivial data
      all_file_ids=np.arange(nmin,nmax+1)
      import pickle
-     goodMaps=pickle.load(open('/data/ohep2/BICEP2/'+str(a.map_size)+'deg/fvsgoodMap.pkl','rb'))
+     goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
      
      file_ids=[all_file_ids[i] for i in range(len(all_file_ids)) if goodMaps[i]!=False] # just for correct maps
 
@@ -42,12 +42,12 @@ if __name__=='__main__':
      r = list(tqdm.tqdm(p.imap(iterator,file_ids),total=len(file_ids)))
      
      # Save output
-     np.save('/data/ohep2/BICEP2/MCestimates%sdeg.npy' %(a.map_size),np.array(r))
+     np.save(a.root_dir+'/MCestimates%sdeg%s.npy' %(a.map_size,a.sep),np.array(r))
 
 def iterator(map_id):
 	""" To run the iterations"""
 	from hades.BICEPerror import est_and_err
-	out = est_and_err(map_id,map_size=a.map_size,l_step=a.l_step,N_sims=a.N_sims)
+	out = est_and_err(int(map_id),map_size=a.map_size,l_step=a.l_step,N_sims=a.N_sims)
 	print('%s map complete' %map_id)
 	return out
 

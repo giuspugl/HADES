@@ -7,23 +7,6 @@ import numpy as np
 def noisy_est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,l_step=a.l_step):
 	""" Compute the estimated angle, amplitude + polarisation strength of a BICEP map in the presence of noise, following Hu & Okamoto 2002 prescription. Error is from MC simulations."""
 	
-def noise_model(l,FWHM=a.FWHM,noise_power=a.noise_power):
-	""" Noise model of Hu & Okamoto 2002. 
-	Inputs: l, 
-	Full-Width-Half-Maximum of experiment in arcminutes, 
-	noise-power (Delta_P) in microK-arcmin.
-	
-	Unit conversions are done to put output in K^2 
-	-> to match input maps in K_CMB. """
-	# NB: Check dimensions
-	
-	#T_CMB = 2.728e6 # in microK
-	FWHM_rad=FWHM/60.*np.pi/180. # in radians
-	noise_power_rad_K=1.0e-6*noise_power/60.*np.pi/180. # in K-rad'
-	
-	exponent=l*(l+1)*FWHM_rad**2 / (8.*np.log(2))
-	Cl_K = (noise_power_rad)**2*np.exp(exponent) # Cl is in K^2-rad
-	return Cl_K
 
 def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,l_step=a.l_step):
     """ Compute estimated angle, amplitude and polarisation of map compared to Gaussian error from MC simulations.
@@ -127,7 +110,7 @@ def error_wrapper(map_id,l_bin,Cl,map_size=a.map_size,N_sims=a.N_sims,l_step=a.l
     """
    
     # Configure directories
-    indir=a.root_dir+str(map_size)+'deg/'
+    indir=a.root_dir+str(map_size)+'deg'+str(a.sep)+'/'
     
     # Load in real space map (just used as a template)
     Tmap=liteMap.liteMapFromFits(indir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
@@ -228,13 +211,13 @@ def plot_est_and_err(map_size,flatSky=False):
     import numpy as np
 
     # Read in data
-    data=np.load(a.root_dir+'MCestimates'+str(map_size)+'deg.npy')
+    data=np.load(a.root_dir+'%sdeg%s/MCestimates%sdeg%s.npy' %(map_size,a.sep,map_size,a.sep))
     
     
     N = len(data)#  no. patches
     
     # Estimator values
-    est_str=[d[0][0] for d in data] # polarisation strength
+    est_frac=[d[0][0] for d in data] # anisotropy fraction
     est_ang=[d[1][0] for d in data] # polarisation angle
     est_A=[d[2][0] for d in data] # monopole amplitude
     est_fs=[d[3][0] for d in data] # f_s anisotropy
@@ -242,9 +225,11 @@ def plot_est_and_err(map_size,flatSky=False):
     est_Afs=[d[5][0] for d in data] # Af_s anisotropy
     est_Afc=[d[6][0] for d in data]
     
+    assert len(est_fc) == a.N_sims
+    
     
     # Gaussian errors
-    err_str=[d[0][1] for d in data] # strength gaussian error
+    err_frac=[d[0][1] for d in data] # fraction gaussian error
     err_ang=[d[1][1] for d in data] # angle gaussian error
     err_A=[d[2][1] for d in data] # Amplitude gaussian error
     err_fs=[d[3][1] for d in data] # fs gaussian error -> unbiased?
@@ -253,7 +238,7 @@ def plot_est_and_err(map_size,flatSky=False):
     err_Afc=[d[6][1] for d in data] # Afc Gaussian error 
     
     # Gaussian means
-    mean_str=[d[0][2] for d in data]
+    mean_frac=[d[0][2] for d in data]
     mean_ang=[d[1][2] for d in data]
     mean_A=[d[2][2] for d in data]
     mean_fs=[d[3][2] for d in data]
@@ -264,8 +249,8 @@ def plot_est_and_err(map_size,flatSky=False):
     # log data
     est_log_A=[np.log10(A) for A in est_A]
     
-    # Compute estimate of strength without zero error
-    unbiased_str=[est_str[i]-mean_str[i] for i in range(len(est_str))]
+    # Compute estimate of anisotropy fraction without zero error
+    unbiased_frac=[est_frac[i]-mean_frac[i] for i in range(len(est_str))]
     
     # Compute significances for Afs,Afc data
     sig_Afs=[est_Afs[i]/err_Afs[i] for i in range(N)]
@@ -289,18 +274,19 @@ def plot_est_and_err(map_size,flatSky=False):
     	return 1./4*np.sqrt(((fs*sig_fc)**2+(fc*sig_fs)**2)/(fs**2+fc**2))*180./np.pi
     
     # These are the unbiased estimates	
-    unbiased_err_str = [amplitude_err(est_fs[i],est_fc[i],err_fs[i],err_fc[i]) for i in range(N)]
+    unbiased_err_frac = [amplitude_err(est_fs[i],est_fc[i],err_fs[i],err_fc[i]) for i in range(N)]
     unbiased_err_ang = [angle_err(est_fs[i],est_fc[i],err_fs[i],err_fc[i]) for i in range(N)]
     
     # Compute significance of strength and angle
-    sig_unbiased_str = [est_str[i]/unbiased_err_str[i] for i in range(N)]
+    sig_unbiased_frac = [est_frac[i]/unbiased_err_frac[i] for i in range(N)]
     sig_unbiased_ang = [est_ang[i]/unbiased_err_ang[i] for i in range(N)]
      
     # Also read in coordinates of patches
     import pickle
-    full_ras=pickle.load(open(a.root_dir+str(map_size)+'deg/fvsmapRas.pkl','rb'))
-    full_decs=pickle.load(open(a.root_dir+str(map_size)+'deg/fvsmapDecs.pkl','rb'))
-    goodMap=pickle.load(open(a.root_dir+str(map_size)+'deg/fvsgoodMap.pkl','rb'))
+    map_dir=a.root_dir+'%sdeg%s/' %(map_size,a.sep)
+    full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
+    full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
+    goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))
     ras=[full_ras[i] for i in range(len(full_ras)) if goodMap[i]!=False]
     decs=[full_decs[i] for i in range(len(full_decs)) if goodMap[i]!=False]
     ras=ras[:N]
@@ -317,34 +303,34 @@ def plot_est_and_err(map_size,flatSky=False):
 
     # Make output directory
     import os
-    outDir=a.root_dir+'SkyPolMapsUnbiased%sdeg/' %(map_size)
+    outDir=a.root_dir+'SkyPolMapsUnbiased%sdeg%s/' %(map_size,a.sep)
     
     if not os.path.exists(outDir):
     	os.mkdir(outDir)
     	
     # Plot maps
-    datSet=[est_str,est_ang,est_A,est_fs,est_fc,\
+    datSet=[est_frac,est_ang,est_A,est_fs,est_fc,\
     sig_fs,sig_fc,\
-    sig_unbiased_str,sig_unbiased_ang,unbiased_err_str,unbiased_err_ang,\
-    unbiased_str,mean_str,est_log_A]
+    sig_unbiased_frac,sig_unbiased_ang,unbiased_err_frac,unbiased_err_ang,\
+    unbiased_frac,mean_frac,est_log_A]
     
     #datSet=[pol_str,pol_ang,str_err,ang_err,sig_str,sig_ang] # all datasets
-    names=['Polarisation Strength','Polarisation Angle','Monopole Amplitude',\
+    names=['Fractional Anistropy','Polarisation Angle','Monopole Amplitude',\
     'f_s','f_c','f_s Significance','f_c Significance',\
-    'Unbiased Strength Significance','Unbiased Angle Significance',\
-    'Unbiased Strength Error','Unbiased Angle Error',\
-    'Strength - mean(isotropic strength)','Mean Isotropic Strength','log Amplitude Estimation']
+    'Unbiased Anisotropy Fraction Significance','Unbiased Angle Significance',\
+    'Unbiased Anisotropy Fraction Error','Unbiased Angle Error',\
+    'Anisotropy Fraction - mean(isotropic fraction)','Mean Isotropic Fraction','log Amplitude Estimation']
     #names=['Polarisation Strength', 'Polarisation Angle', \
     #'Strength Gaussian Error','Angle Gaussian Error',
     #'Polarisation Strength Significance','Polarisation Angle Significance']
-    fileStr=['est_str','est_ang','est_A','est_fs','est_fc','sig_fs','sig_fc',\
-    'sig_unbiased_str','sig_unbiased_ang','unbiased_err_str','unbiased_err_ang',\
-    'str_mean_sub','mean_iso_str','est_log_A']
+    fileStr=['est_frac','est_ang','est_A','est_fs','est_fc','sig_fs','sig_fc',\
+    'sig_unbiased_frac','sig_unbiased_ang','unbiased_err_frac','unbiased_err_ang',\
+    'frac_mean_sub','mean_iso_frac','est_log_A']
     #fileStr=['pol_str','pol_ang','str_err','ang_err','sig_str','sig_ang']
     
     # Size of points in plot
     if flatSky:
-    	s_dot=120
+    	s_dot=80
     else:
     	if map_size==5:
     		s_dot=50 

@@ -6,7 +6,6 @@ nmin = 0
 nmax = 1e5#1399#3484
 cores = 42
 
-
 if __name__=='__main__':
      """ Batch process to use all available cores to compute the KK estimators and Gaussian errors using the est_and_err function im MCerror
     Inputs are min and max file numbers. Output is saved as npy file"""
@@ -15,8 +14,7 @@ if __name__=='__main__':
      import sys
      import numpy as np
      import multiprocessing as mp
-     
-     
+     	
      # Parameters if input from the command line
      if len(sys.argv)>=2:
          nmin = int(sys.argv[1])
@@ -31,24 +29,34 @@ if __name__=='__main__':
      goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
      
      file_ids=[int(all_file_ids[i]) for i in range(len(all_file_ids)) if goodMaps[i]!=False] # just for correct maps
-
+     
      # Start the multiprocessing
      p = mp.Pool(processes=cores)
      
      # Define iteration function
-     from hades.BICEPbatch import iterator
+     from hades.NoiseBatch import noisy_iterator
      
      # Display progress bar with tqdm
-     r = list(tqdm.tqdm(p.imap(iterator,file_ids),total=len(file_ids)))
+     r = list(tqdm.tqdm(p.imap(noisy_iterator,file_ids),total=len(file_ids)))
      
-     # Save output
-     np.save(a.root_dir+'/MCestimates%sdeg%s.npy' %(a.map_size,a.sep),np.array(r))
+     if not a.NoiseAnalysis:
+     	# Save output
+     	np.save(a.root_dir+'%sdeg%s/NoisyMCestimates%sdeg%s.npy' %(a.map_size,a.sep,a.map_size,a.sep),np.array(r))
+     if a.NoiseAnalysis:
+     	import os
+     	outDir=a.root_dir+'%sdeg%s/NoiseAnalysis/' %(a.map_size,a.sep)
+     	if not os.path.exists(outDir):
+     		os.mkdir(outDir)
+     	if a.ComparisonSetting=='FWHM':
+     		np.save(outDir+'FWHM%.2f.npy' %a.FWHM,np.array(r))
+     	else:
+     		np.save(outDir+'NoisePower%.2f.npy' %a.noise_power,np.array(r))
 
-def iterator(map_id):
+
+def noisy_iterator(map_id):
 	""" To run the iterations"""
-	from hades.BICEPerror import est_and_err
-	out = est_and_err(int(map_id),map_size=a.map_size,l_step=a.l_step,N_sims=a.N_sims)
+	from hades.NoisePower import est_and_err
+	out = est_and_err(int(map_id))
 	print('%s map complete' %map_id)
 	return out
-
 

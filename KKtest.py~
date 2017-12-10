@@ -1,6 +1,8 @@
 from .params import BICEP
 a=BICEP()
 
+import numpy as np
+
 def angle_estimator(map_id,map_size=a.map_size,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,slope=None,map=None,returnSlope=False):
     """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
     Inputs: map_id
@@ -16,15 +18,17 @@ def angle_estimator(map_id,map_size=a.map_size,l_step=a.l_step,lMin=a.lMin,lMax=
     p_str,p_ang -> polarisation strength and angle
     """
     from hades import PowerMap
-    import numpy as np
-
+    
     if map==None and slope==None:
         # Create rescaled map and slope
+        print 'OLD'
         print 'Creating new map'
         map,slope,_=PowerMap.RescaledPlot(map_id,map_size=map_size,l_min=lMin,l_max=lMax,l_step=l_step,rescale=True,show=False,showFit=False,returnMap=True)
   
     if map!=None and slope==None:
         # Compute slope of map only
+        print 'OLD'
+        print 'recompute slope'
         slope,_,_=PowerMap.MapSlope(map,lMin,lMax,l_step)
 
         
@@ -57,7 +61,7 @@ def angle_estimator(map_id,map_size=a.map_size,l_step=a.l_step,lMin=a.lMin,lMax=
 
     # Compute polarisation strength + angle
     p_str = np.sqrt(fs**2+fc**2) # Strength
-    p_ang=0.25*np.arctan(fs/fc)*180/np.pi # in degrees (0 to 45)
+    p_ang=0.25*np.arctan(fs/fc)*180/np.pi # in degrees (-22.5 to 22.5)
 
     if returnSlope:
         return p_str,p_ang,fs,fc,Afs,Afc,A,slope
@@ -71,7 +75,6 @@ if __name__=='__main__':
     # Import modules
     import tqdm
     import sys
-    import numpy as np
     import multiprocessing as mp
 
     # Default parameters
@@ -110,8 +113,7 @@ def reconstructor(map_size=10):
     Input: map_size = 3,5,10
     DEPRACATED 
     """
-    import numpy as np
-
+  
     # Read in data
     data=np.load('/data/ohep2/angleMaps'+str(map_size)+'Deg.npz')
     pol=data['pol']
@@ -164,3 +166,88 @@ def reconstructor(map_size=10):
     plt.clf()
 
     return None    
+    
+def noisy_estimator(map,map_size=a.map_size,lMin=a.lMin,lMax=a.lMax,\
+FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
+    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
+    This uses the noise model in hades.NoisePower.noise_model
+    
+    NB: CURRENTLY NOISE-FREE!
+    
+    Inputs: map (in power-space)
+    map_size = width of map in degrees
+    lMin,lMax= fitting range of l
+    slope -> fiducial C_l map slope
+    noNoise -> if True, sets S/N ratio to 1 for all pixels
+    
+    Outputs:
+    NEW:    A,fs,fc from estimators
+    OLD:    p_str,p_ang,monopole amplitude, fs,fc,Afs,Afc from estimators
+ 
+    """
+    # Compute sky fraction
+    area = (a.map_size*np.pi/180.)**2. # map area in steradians
+    f_sky = area/(4.*np.pi)
+    
+    # Initialise variables
+    A_num,A_den=0.,0.
+    Afc_num,Afc_den=0.,0.
+    Afs_num,Afs_den=0.,0.
+    
+    # Import noise model
+    from hades.NoisePower import noise_model
+
+    # Construct estimators over all pixels
+    #print Afc_num, A_den
+    
+    for i in range(map.Ny):
+        for j in range(map.Nx):
+            l=map.modLMap[i,j]
+            ang=map.thetaMap[i,j]*np.pi/180. # in radians
+            if (l<lMax) and (l>lMin):
+            
+                fiducial = l**(-slope)#  fiducial C_l^f 
+                noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+                if noNoise:
+                	SN = 1. # signal-to-noise ratio
+                else:
+                	sigma_l_sq = 2.*(noise_Cl**2.)/ (f_sky*(2.*l+1.)) 
+                        SN = fiducial/np.sqrt(sigma_l_sq)
+                
+                # A estimator
+                A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+                A_den+=SN**2.
+                # Afc estimator
+                Afc_num+=map.powerMap[i,j]/fiducial*(np.cos(4.*ang)*SN**2.)
+                Afc_den+=(SN*np.cos(4.*ang))**2.
+                # Afs estimator
+                Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
+                Afs_den+=(SN*np.sin(4.*ang))**2.
+                
+    # for stability
+    A=A_num/A_den
+    Afs=Afs_num/Afs_den
+    Afc=Afc_num/Afc_den
+    fs=Afs/A
+    fc=Afc/A
+    
+    if False:
+       	A=np.exp(np.log(A_num)-np.log(A_den)) # A estimator
+    	Afc=np.sign(Afc_num)*np.exp(np.log(np.abs(Afc_num))-np.log(Afc_den))
+    	Afs=np.sign(Afs_num)*np.exp(np.log(np.abs(Afs_num))-np.log(Afs_den))
+    	fs=np.sign(Afs)*np.exp(np.log(np.abs(Afs))-np.log(A)) # fs estimation
+    	fc=np.sign(Afc)*np.exp(np.log(np.abs(Afc))-np.log(A)) # fc estimation
+    
+    #print Afc_num, Afc_den, SN
+    
+    if False:
+    	# Compute polarisation strength + angle
+    	p_str = np.sqrt(fs**2.+fc**2.) # Strength
+    	p_ang=0.25*np.arctan(fs/fc)*180./np.pi # in degrees (-22.5 to 22.5)
+  
+	return p_str,p_ang,A,fs,fc,Afs,Afc
+
+    else:
+    	return A,fs,fc
+
+
