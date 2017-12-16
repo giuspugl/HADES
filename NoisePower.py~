@@ -4,7 +4,7 @@ a=BICEP()
 from flipper import *
 import numpy as np
 
-def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,slope=a.slope):
+def est_and_err(map_id,map_size=a.map_size,sep=a.sep,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,slope=a.slope):
 	""" Compute the estimated angle, amplitude and polarisation strength in the presence of noise, following Hu & Okamoto 2002 noise model. Error is from MC simulations.
 	Output: list of data for A, fs, fc (i.e. output[0]-> A etc.), with structure [map estimate, MC_standard_deviation, MC_mean]
 	"""
@@ -12,9 +12,16 @@ def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,noise_power=a.noise_p
 	from .PowerMap import MakePower
 	Bpow=MakePower(map_id,map_size=map_size,map_type='B')
 	
+	# Load the relevant window function
+	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	mask=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
+	
+	# Compute mean square window function
+	windowFactor=np.mean(mask.data**2.)
+	
 	# Now compute the noise power-map
 	from .NoisePower import noise_map
-	noiseMap=noise_map(powMap=Bpow.copy(),noise_power=a.noise_power,FWHM=a.FWHM)
+	noiseMap=noise_map(powMap=Bpow.copy(),noise_power=a.noise_power,FWHM=a.FWHM,windowFactor=windowFactor)
 	
 	# Compute total map
 	totMap=Bpow.copy()
@@ -27,7 +34,7 @@ def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,noise_power=a.noise_p
 	## Run MC Simulations	
 	# First compute 1D power spectrum by binning in annuli
 	from hades.PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.5*a.lMax,0.8*a.l_step,binErr=False) # gives central binning l and mean power in annulus
+	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.*a.lMax,0.8*a.l_step,binErr=False,windowFactor=windowFactor) # gives central binning l and mean power in annulus using window function corrections
 	
 	# Compute univariate spline model fit to 1D power spectrum
 	from scipy.interpolate import UnivariateSpline
@@ -46,7 +53,7 @@ def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,noise_power=a.noise_p
 	MC_data = np.zeros((N_sims,len(est_data)))
 	
 	for n in range(N_sims): # for each MC map
-		MC_map=single_MC(totMap.copy(),model_power) # create random map from isotropic spectrum
+		MC_map=single_MC(totMap.copy(),model_power,windowFactor=windowFactor) # create random map from isotropic spectrum
 		MC_data[n]=noisy_estimator(MC_map.copy(),slope=slope) # compute MC anisotropy parameters  
 	
 	# Compute mean and standard deviation of MC statistics
@@ -59,13 +66,17 @@ def est_and_err(map_id,map_size=a.map_size,N_sims=a.N_sims,noise_power=a.noise_p
 	return output
 	
 	
-def single_MC(tempMap,model_power):
+def single_MC(tempMap,model_power,windowFactor=None):
 	""" Compute a Monte Carlo random map, created from a Gaussian isotropic spectrum.
 	Inputs: tempMap -> template power-domain map
 	model_power -> model function for C_l(ell) (including noise)
+	windowFactor -> <W^2> for window - must be multiplied by to avoid window errors
 	
 	Output -> MC random map as a two-dimensional power-map
 	"""
+	#Testing
+	if windowFactor==None:
+		raise Exception('No window function')
 	
 	template=tempMap.copy() # to avoid overwriting data file
 	
@@ -75,12 +86,12 @@ def single_MC(tempMap,model_power):
 	# Compute the power map based on Gaussian random distributions for each pixel.
 	for i in range(len(data)):
 		for j in range(len(data[i])):
-			l = template.modLMap[i][j] # (modulus of l)
+			l = template.modLMap[i,j] # (modulus of l)
 			if l>0.5*a.lMin and l<1.5*a.lMax: # if in correct range
 				var = model_power(l) # variance of model-power
 				amplitude = np.random.normal(loc=0.0,scale=np.sqrt(var)) # random amplitude from Gaussian
 				# NB: phase term vanishes when power-map is constructed from FFT
-				data[i,j] = amplitude**2.0 # (real by construction)
+				data[i,j] = windowFactor*(amplitude**2.0) # (real by construction)
 	template.powerMap=data
 	
 	return template
@@ -104,19 +115,24 @@ def noise_model(l,FWHM=a.FWHM,noise_power=a.noise_power):
 	Cl_K = (noise_power_rad_K)**2.*np.exp(exponent) # Cl is in K^2-rad
 	return Cl_K
 	
-def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power):
+def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,windowFactor=None):
 	""" Create a Gaussian random noise power map from a given noise profile.
-	
+	We multiply by <W^2> to include window function effects.
 	NB: either real OR power map needs to be specified as template (power map faster)
 	
 	Inputs: realMap -> real space map to use as template
 	powMap -> power2D space map to use as a template
 	lMin/lMax -> l-range to create map over (matching that for estimators)
 	FWHM/noise_power -> noise parameters (see noise_model() )
+	windowFactor -> <W^2> for window function needed for window corrections
 	
 	Output: power2D instance with Gaussian random noise power matching given C_l	
 	"""
 	from .NoisePower import noise_model
+	
+	# Testing
+	if windowFactor==None:
+		raise Exception('No window function')
 	
 	if powMap==None:
 		if realMap!=None:
@@ -136,7 +152,7 @@ def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise
 				amplitude = np.random.normal(loc=0.0,scale=np.sqrt(var)) # random 
 				# NB: phase term vanishes when power-map is constructed from FFT
 				data[i,j] = amplitude**2.0 # (real by construction)
-	powerMap.powerMap=data
+	powerMap.powerMap=data*windowFactor
 	
 	return powerMap
 	
@@ -152,26 +168,30 @@ def reconstructor(map_size=a.map_size,sep=a.sep):
 	A=[d[0][0] for d in dat]
 	fs=[d[1][0] for d in dat]
 	fc=[d[2][0] for d in dat]
+	Afs=[d[3][0] for d in dat]
+	Afc=[d[4][0] for d in dat]
 	A_err=[d[0][1] for d in dat]
 	fs_err=[d[1][1] for d in dat]
 	fc_err=[d[2][1] for d in dat]
+	Afs_err=[d[3][1] for d in dat]
+	Afc_err=[d[4][1] for d in dat]
 	
 	# Compute angles and anisotropy fractions
-	ang=[0.25*np.arctan(fs[i]/fc[i])*180./np.pi for i in range(N)]
+	ang=[0.25*np.arctan(Afs[i]/Afc[i])*180./np.pi for i in range(N)]
 	frac=[np.sqrt(fs[i]**2+fc[i]**2) for i in range(N)]
 	
 	def ani_frac_err(fs,fc,sig_fs,sig_fc): # error in fraction 
     		return np.sqrt(((sig_fs*fs)**2+(sig_fc*fc)**2)/(fs**2+fc**2))
     
-    	def angle_err(fs,fc,sig_fs,sig_fc): # error in angle in degrees
-    		return 1./4*np.sqrt(((fs*sig_fc)**2+(fc*sig_fs)**2)/(fs**2+fc**2))*180./np.pi
+    	def angle_err(Afs,Afc,sig_Afs,sig_Afc): # error in angle in degrees
+    		return 1./4*np.sqrt(((Afs*sig_Afc)**2+(Afc*sig_Afs)**2)/(Afs**2+Afc**2))*180./np.pi
 	
-	ang_err=[angle_err(fs[i],fc[i],fs_err[i],fc_err[i]) for i in range(N)]
+	ang_err=[angle_err(Afs[i],Afc[i],Afs_err[i],Afc_err[i]) for i in range(N)]
 	frac_err=[ani_frac_err(fs[i],fc[i],fs_err[i],fc_err[i]) for i in range(N)]
 	
 	# Compute significances
-	dat_set=[A,frac,ang,fs,fc]
-	dat_errs=[A_err,frac_err,ang_err,fs_err,fc_err]
+	dat_set=[A,frac,ang,fs,fc,Afs,Afc]
+	dat_errs=[A_err,frac_err,ang_err,fs_err,fc_err,Afs_err,Afc_err]
 	
 	dat_sig=[]
 	for i in range(len(dat_set)):
@@ -194,9 +214,11 @@ def reconstructor(map_size=a.map_size,sep=a.sep):
     
     	# Now plot on grid:
     	import matplotlib.pyplot as plt
-    	names = ['Monopole Amplitude','Anisotropy Fraction','Polarisation Angle','fs','fc','Amplitude Significance',\
-    	'Anisotropy Fraction Significance','Angle Significance','fs Significance','fc Significance','log Monopole Amplitude']
-    	name_str=['A_est','frac_est','ang_est','fs','fc','A_sig','frac_sig','ang_sig','fs_sig','fc_sig','log_A_est']
+    	names = ['Monopole Amplitude','Anisotropy Fraction','Polarisation Angle','fs','fc','Afs','Afc','Amplitude Significance',\
+    	'Anisotropy Fraction Significance','Angle Significance','fs Significance','fc Significance',\
+    	'Afs Significance','Afc Significance','log Monopole Amplitude']
+    	name_str=['A_est','frac_est','ang_est','fs','fc','Afs','Afc','A_sig','frac_sig','ang_sig','fs_sig','fc_sig',\
+    	'Afs_sig','Afc_sig','log_A_est']
     	
     	for j in range(len(names)):
     		plt.figure()
@@ -207,6 +229,75 @@ def reconstructor(map_size=a.map_size,sep=a.sep):
     		plt.clf()
     		plt.close()
     	
+def chi2_reconstructor(map_size=a.map_size,sep=a.sep):
+	""" Plotting code for the BICEP patch using the chi-squared statistics. 
+	Inputs: map_size and centre separation.
+	Outputs: plots saved in ChiSkyMaps/ subdirectory."""
+	
+	# Load in dataset
+	dat = np.load(a.root_dir+'%sdeg%s/NoisyMCestimates%sdeg%s.npy' %(map_size,sep,map_size,sep))
+	N = len(dat)
+	
+	# Construct A,fs,fc arrays
+	A=[d[0][0] for d in dat]
+	fs=[d[1][0] for d in dat]
+	fc=[d[2][0] for d in dat]
+	Afs=[d[3][0] for d in dat]
+	Afc=[d[4][0] for d in dat]
+	A_err=[d[0][1] for d in dat]
+	fs_err=[d[1][1] for d in dat]
+	fc_err=[d[2][1] for d in dat]
+	Afs_err=[d[3][1] for d in dat]
+	Afc_err=[d[4][1] for d in dat]
+	
+	# Compute angles and anisotropy fractions
+	ang=[0.25*np.arctan(Afs[i]/Afc[i])*180./np.pi for i in range(N)]
+	frac=[np.sqrt(fs[i]**2+fc[i]**2) for i in range(N)]
+	
+	# Create log monopole amplitude data 
+	log_A_est=np.log10(A)
+	
+    	def angle_err(Afs,Afc,sig_Afs,sig_Afc): # error in angle in degrees
+    		return 1./4.*np.sqrt(((Afs*sig_Afc)**2+(Afc*sig_Afs)**2)/(Afs**2+Afc**2))*180./np.pi
+	
+	ang_err=[angle_err(Afs[i],Afc[i],Afs_err[i],Afc_err[i]) for i in range(N)]
+	
+	# Compute chi-squared probability
+	err_f=[np.mean([fs_err[i],fc_err[i]]) for i in range(len(fs_err))] # since fs_err=fc_err ideally
+	
+	def chi2_prob(eps,err):
+		return 1.-np.exp(-eps**2./(2.*err**2.))
+	
+	rand_prob=[chi2_prob(frac[i],err_f[i]) for i in range(len(err_f))]
+	
+	dat_set=[A,frac,ang,fs,fc,Afs,Afc,log_A_est,ang_err,rand_prob]
+	
+	# Load coordinates of patch centres
+	from .NoisePower import good_coords
+	ra,dec=good_coords(map_size,sep,N)
+	
+    	# Make output directory
+    	import os
+    	outDir=a.root_dir+'ChiSkyMaps%sdeg%s/' %(map_size,sep)
+    
+    	if not os.path.exists(outDir):
+    		os.mkdir(outDir)
+    
+    	# Now plot on grid:
+    	import matplotlib.pyplot as plt
+    	names = ['Monopole Amplitude','Anisotropy Fraction','Polarisation Angle','fs','fc','Afs','Afc','log Monopole Amplitude',
+    	'Angle Error','Log Chi-Squared Probability of Randomness',]
+    	name_str=['A_est','frac_est','ang_est','fs','fc','Afs','Afc','log_A_est','ang_err','chi2_prob']
+    	
+    	for j in range(len(names)):
+    		plt.figure()
+    		plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+    		plt.title(names[j])
+    		plt.colorbar()
+    		plt.savefig(outDir+name_str[j]+'.png',bbox_inches='tight')
+    		plt.clf()
+    		plt.close()
+    		
 def good_coords(map_size,sep,N):
 	""" Compute RA/dec coordinates in correct patch.
 	Output is RA,dec in degrees. N is no. data points

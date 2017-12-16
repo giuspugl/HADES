@@ -47,7 +47,7 @@ if __name__=='__main__':
      	outDir=a.root_dir+'%sdeg%s/NoiseAnalysis/' %(a.map_size,a.sep)
      	if not os.path.exists(outDir):
      		os.mkdir(outDir)
-     	if a.ComparisonSetting='FWHM':
+     	if a.ComparisonSetting=='FWHM':
      		np.save(outDir+'FWHM%.2f.npy' %a.FWHM,np.array(r))
      	else:
      		np.save(outDir+'NoisePower%.2f.npy' %a.noise_power,np.array(r))

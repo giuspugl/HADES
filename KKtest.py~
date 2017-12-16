@@ -166,13 +166,63 @@ def reconstructor(map_size=10):
     plt.clf()
 
     return None    
+   
+def zero_estimator(map,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,factor=None,rot=0.):
+	""" Use KK 14 estimators to find polarisation strength and anisotropy angle via fs,fc parameters.
+	This uses the noise model in hades.NoisePower.noise_model
+    
+  	Inputs: map (in power-space)
+ 	map_size = width of map in degrees
+    	lMin,lMax= fitting range of l
+    	slope -> fiducial C_l map slope
+    	
+    	Outputs:
+    	A,fs,fc from estimators
+    	"""
+    	# Initialise variables
+    	A_num,A_den=0.,0.
+    	Afs_num,Afs_den=0.,0.
+    	Afc_num,Afc_den=0.,0.
+    	
+    	from hades.NoisePower import noise_model
+    	
+	# Construct estimators over all pixels in range
+	for i in range(map.Ny):
+		for j in range(map.Nx):
+			l=map.modLMap[i,j]
+			if l<lMax and l>lMin:
+				f_sky=0.0002
+				ang=(map.thetaMap[i,j]+rot)*np.pi/180. # in radians
+				fiducial=l**(-slope)
+				noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+				if KKmethod:
+					sigma_l_sq = 2.*(noise_Cl**2.)/ (f_sky*(2.*l+1.)) 
+                        		SN = fiducial/np.sqrt(sigma_l_sq)
+                        	else:
+                        		SN=(factor*fiducial)/(factor*fiducial+noise_Cl)    
+               			# A estimator
+                		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+                		A_den+=SN**2.
+                		# Afc estimator
+                		Afc_num+=map.powerMap[i,j]/fiducial*(np.cos(4.*ang)*SN**2.)
+                		Afc_den+=(SN*np.cos(4.*ang))**2.
+                		# Afs estimator
+                		Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
+                		Afs_den+=(SN*np.sin(4.*ang))**2.
+                
+    	A=A_num/A_den
+    	Afs=Afs_num/Afs_den
+    	Afc=Afc_num/Afc_den
+    	fs=Afs/A
+    	fc=Afc/A
+    	
+    	return A,fs,fc,Afs,Afc
+
     
 def noisy_estimator(map,map_size=a.map_size,lMin=a.lMin,lMax=a.lMax,\
 FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
     """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
     This uses the noise model in hades.NoisePower.noise_model
-    
-    NB: CURRENTLY NOISE-FREE!
     
     Inputs: map (in power-space)
     map_size = width of map in degrees
@@ -203,9 +253,8 @@ FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
     for i in range(map.Ny):
         for j in range(map.Nx):
             l=map.modLMap[i,j]
-            ang=map.thetaMap[i,j]*np.pi/180. # in radians
             if (l<lMax) and (l>lMin):
-            
+            	ang=(map.thetaMap[i,j]+11.25)*np.pi/180. # in radians
                 fiducial = l**(-slope)#  fiducial C_l^f 
                 noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
                 if noNoise:
@@ -248,6 +297,71 @@ FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
 	return p_str,p_ang,A,fs,fc,Afs,Afc
 
     else:
-    	return A,fs,fc
+    	return A,fs,fc,Afs,Afc
 
 
+def rotation_estimator(map,map_size=a.map_size,lMin=a.lMin,lMax=a.lMax,\
+FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
+    """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.
+    This uses the noise model in hades.NoisePower.noise_model. Rotate over 22.5 degrees and average to avoid pixellation errors.
+    
+    Inputs: map (in power-space)
+    map_size = width of map in degrees
+    lMin,lMax= fitting range of l
+    slope -> fiducial C_l map slope
+    noNoise -> if True, sets S/N ratio to 1 for all pixels
+    
+    Outputs:
+    fraction and angle from estimators
+    
+    """
+    # Compute sky fraction
+    area = (a.map_size*np.pi/180.)**2. # map area in steradians
+    f_sky = area/(4.*np.pi)
+    
+    
+    
+    # Import noise model
+    from hades.NoisePower import noise_model
+    
+    A_all,frac_all,ang_all=[],[],[] # containing fractions/angles from each theta
+
+    for theta in a.rotation_angles:
+    	# Initialise variables
+    	A_num,A_den=0.,0.
+    	Afc_num,Afc_den=0.,0.
+    	Afs_num,Afs_den=0.,0.
+    
+    	for i in range(map.Ny):
+    	    for j in range(map.Nx):
+    	        l=map.modLMap[i,j]
+    	        if (l<lMax) and (l>lMin):
+    	        	ang=(map.thetaMap[i,j]+theta)*np.pi/180. # in radians
+    	         	fiducial = l**(-slope)#  fiducial C_l^f 
+    	           	noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+    	           	if noNoise:
+    	            		SN = 1. # signal-to-noise ratio
+       		 	else:
+                		sigma_l_sq = 2.*(noise_Cl**2.)/ (f_sky*(2.*l+1.)) 
+                        	SN = fiducial/np.sqrt(sigma_l_sq)
+                
+                	# A estimator
+                	A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+                	A_den+=SN**2.
+                	# Afc estimator
+                	Afc_num+=map.powerMap[i,j]/fiducial*(np.cos(4.*ang)*SN**2.)
+                	Afc_den+=(SN*np.cos(4.*ang))**2.
+                	# Afs estimator
+                	Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
+                	Afs_den+=(SN*np.sin(4.*ang))**2.
+                
+    	A=A_num/A_den
+    	Afs=Afs_num/Afs_den
+    	Afc=Afc_num/Afc_den
+    	fs=Afs/A
+    	fc=Afc/A
+    	A_all.append(A)
+    	frac_all.append(np.sqrt(fs**2.+fc**2.))
+    	ang_all.append(0.25*np.arctan(fs/fc)*180./np.pi-theta)
+    
+    return np.mean(A_all), np.mean(frac_all), np.mean(ang_all)

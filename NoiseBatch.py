@@ -59,4 +59,6 @@ def noisy_iterator(map_id):
 	out = est_and_err(int(map_id))
 	print('%s map complete' %map_id)
 	return out
+	
+
 

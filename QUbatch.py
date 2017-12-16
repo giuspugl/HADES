@@ -1,0 +1,112 @@
+import numpy as np
+from flipper import *
+from hades.params import BICEP
+a=BICEP()
+
+# Default parameters
+nmin = 0
+nmax = 1e5#1399#3484
+cores = 42
+
+if __name__=='__main__':
+     """ Batch process to use all available cores to compute the mean sqrt(Q**2+U**2) value for each submap in the BICEP region
+    Inputs are min and max file numbers. Output is saved as npy file"""
+
+     import tqdm
+     import sys
+     import numpy as np
+     import multiprocessing as mp
+     	
+     # Parameters if input from the command line
+     if len(sys.argv)>=2:
+         nmin = int(sys.argv[1])
+     if len(sys.argv)>=3:
+         nmax = int(sys.argv[2])
+     if len(sys.argv)==4:
+         cores = int(sys.argv[3])
+     
+     # Compute map IDs with non-trivial data
+     all_file_ids=np.arange(nmin,nmax+1)
+     import pickle
+     goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
+     
+     file_ids=[int(all_file_ids[i]) for i in range(len(all_file_ids)) if goodMaps[i]!=False] # just for correct maps
+     
+     # Start the multiprocessing
+     p = mp.Pool(processes=cores)
+     
+     # Define iteration function
+     from hades.QUbatch import QUT_strength
+     
+     # Display progress bar with tqdm
+     r = list(tqdm.tqdm(p.imap(QUT_strength,file_ids),total=len(file_ids)))
+     
+     np.save(a.root_dir+'%sdeg%s/QUTstrengths.npy' %(a.map_size,a.sep),np.array(r))
+     
+
+def QUT_strength(map_id,map_size=a.map_size,sep=a.sep):
+	""" Function to compute mean np.sqrt(Q**2+U**2) and mean(T) for a map patch.
+	Also saves mean window Factor <W^2> for each."""
+	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	
+	# Load maps
+	Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
+	Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+	Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+	maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
+	
+	# Calculate power
+	comb_map=Qmap.copy()
+	ang_map=Qmap.copy()
+	for i in range(len(comb_map.data)):
+		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)
+		ang_map.data[i]=0.5*np.arctan(Qmap.data[i]/Umap.data[i])*180./np.pi # angle in radians
+		
+	windowFactor=np.mean(maskMap.data**2.)
+	
+	return np.mean(comb_map.data),np.std(comb_map.data),np.mean(Tmap.data),np.std(Tmap.data),np.mean(ang_map.data),np.std(ang_map.data),windowFactor
+	
+def reconstructor(map_size=a.map_size,sep=a.sep):
+	""" Code to plot the sqrt(Q**2+U**2) and mean(T) data for the BICEP patch and the sky regions tested.
+	Inputs: map_size and centre separation.
+	Outputs: plot saved in BICEP2/ directory."""
+	
+	# Load dataset
+	dat=np.load(a.root_dir+'%sdeg%s/QUTstrengths.npy' %(map_size,sep))
+	
+	QUmeans=[d[0] for d in dat]
+	QUerrs=[d[1] for d in dat]
+	QUsigs=[d[0]/d[1] for d in dat] # significance showing correlation on patch-size
+	Tmeans=[d[2] for d in dat]
+	Terrs=[d[3] for d in dat]
+	Tsigs=[d[2]/d[3] for d in dat]
+	QUang=[d[4] for d in dat]
+	QUang_errs=[d[5] for d in dat]
+	wFactors=[d[6] for d in dat]
+	N=len(dat)
+	
+	dat_set=[QUmeans,QUerrs,QUsigs,Tmeans,Terrs,Tsigs,QUang,QUang_errs,wFactors]
+	names=['Mean sqrt(Q^2+U^2)','sqrt(Q^2+U^2) Error','sqrt(Q^2+U^2) Significance',\
+	'Mean T','T Error','T significance','QU Angle (degrees)', 'QU Angle Error (degrees)','Window Factors']
+	name_str=['QUmeans','QUerrs','QUsigs','Tmeans','Terrs','Tsigs','QUang','QUang_errs','windowFactors']
+
+	outDir=a.root_dir+'QUTStrengths%sdeg%s/' %(map_size,sep) # output filestring
+	
+	import os
+	if not os.path.exists(outDir):
+		os.mkdir(outDir)
+	
+	# Load coordinates of patch centres
+	from .NoisePower import good_coords
+	ra,dec=good_coords(map_size,sep,N)
+	
+    	# Now plot on grid:
+    	import matplotlib.pyplot as plt
+    	for j in range(len(names)):
+    		plt.figure()
+    		plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+    		plt.title(names[j])
+    		plt.colorbar()
+    		plt.savefig(outDir+name_str[j]+'.png',bbox_inches='tight')
+    		plt.clf()
+    		plt.close()

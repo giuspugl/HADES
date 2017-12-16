@@ -164,9 +164,9 @@ def frac_err(setting=b.ComparisonSetting,map_size=b.map_size,sep=b.sep):
 			medians,his,lows=np.zeros((3,len(noise_param)-1)),np.zeros((3,len(noise_param)-1)),np.zeros((3,len(noise_param)-1))
 			
 		else:
-			err_fs=[float((fs[i]-best_fs[i])/best_fs[i]) for i in range(N)]
-			err_fc=[float((fc[i]-best_fc[i])/best_fc[i]) for i in range(N)]
-			err_logA=[float((logA[i]-best_logA[i])/best_logA[i]) for i in range(N)]
+			err_fs=[float((fs[i]-best_fs[i])) for i in range(N)]
+			err_fc=[float((fc[i]-best_fc[i])) for i in range(N)]
+			err_logA=[float((logA[i]-best_logA[i])) for i in range(N)]
 			
 			dats=[err_fs,err_fc,err_logA]
 			strs=['err_fs','err_fc','err_logA']

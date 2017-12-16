@@ -183,22 +183,26 @@ def MakePower(map_id,map_size=a.map_size,map_type='B'):
     elif map_type=='T':
         return TT
         
-def oneD_binning(powMap,lMin,lMax,l_step,binErr=False):
+def oneD_binning(powMap,lMin,lMax,l_step,binErr=False,windowFactor=None):
 	""" Compute the one-dimensional power spectrum of a given map from binning in annuli.
 	Inputs: powermap, min.max l and bin size.
 	binErr -> whether to return error in power from binning
+	windowFactor -> <W^2> for window function corrections
 	Outputs: central l value, binned power, [binned power error] """
 	l_bin = np.arange(lMin,lMax,l_step) # binning positions
 	l_cen, bin_pow = [], [] 
 	if binErr:
 		bin_err=[]
 	
+	if windowFactor==None:
+		raise Exception('No window factor added')
+	
 	for i in range(len(l_bin)-1):
 		l_cen.append(0.5*(l_bin[i]+l_bin[i+1])) # central l-value
 		temp=powMap.meanPowerInAnnulus(l_bin[i],l_bin[i+1])
-		bin_pow.append(temp[0])
+		bin_pow.append(temp[0]/windowFactor)
 		if binErr:
-			bin_err.append(temp[1])
+			bin_err.append(temp[1]/windowFactor)
 	
 	if binErr:
 		return l_cen, bin_pow, bin_err
