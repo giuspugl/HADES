@@ -1,0 +1,14 @@
+# noise_params.sub -- run map creation for each tile with specified noise parameters
+
+universe		= vanilla
+executable              = /data/ohep2/hades/NoiseParams.sh
+arguments               = "$(Process)"
+should_transfer_files   = IF_NEEDED
+when_to_transfer_output = ON_EXIT
+request_memory		= 1000
+log                     = noise_params.log
+error 			= noise_params.error
+output			= noise_params.out
+notification		= never
+queue 10
+#10455

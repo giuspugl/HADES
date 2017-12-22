@@ -1,0 +1,13 @@
+# hyper_maps.sub -- run map creation for each patch
+
+universe		= vanilla
+executable              = /data/ohep2/hades/hyper_maps.sh
+arguments               = "$(Process)"
+should_transfer_files   = IF_NEEDED
+when_to_transfer_output = ON_EXIT
+request_memory		= 1000
+log                     = hyper_maps.log
+error 			= hyper_maps.error
+output			= hyper_maps.out
+notification		= never
+queue 48

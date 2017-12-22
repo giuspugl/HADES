@@ -5,7 +5,8 @@ a=BICEP()
 from flipper import *
 
 def padded_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
-	sep=a.sep,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,slope=a.slope):
+	sep=a.sep,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,\
+	slope=a.slope,lMin=a.lMin,lMax=a.lMax,KKmethod=a.KKmethod,rot=0.):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, using zero-padding.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations.
 	
@@ -17,45 +18,42 @@ def padded_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	noise_power (noise power in microK-arcmin)
 	FWHM (noise FWHM in arcmin)
 	slope (fiducial slope of C_l isotropic dust dependance)
+	lMin / lMax (range of ell values to apply the estimators over)
+	KKmethod (Boolean, controlling which SNR to use (see KKtest.py))
+	rot (angle to rotate by before applying estimators - for testing)
+	NB: if rot!=0, only ang, A, frac can be used
 	
 	Output: Estimated data for A, fs, fc and errors."""
 	
-	# First compute padded B-mode map with desired padding ratio
+	# First compute high-resolution B-mode map from padded-real space map with desired padding ratio
 	from .PaddedPower import MakePaddedPower
 	Bpow=MakePaddedPower(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep)
-
-
-def est_and_err(map_id,map_size=a.map_size,sep=a.sep,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,slope=a.slope):
-	""" Compute the estimated angle, amplitude and polarisation strength in the presence of noise, following Hu & Okamoto 2002 noise model. Error is from MC simulations.
-	Output: list of data for A, fs, fc (i.e. output[0]-> A etc.), with structure [map estimate, MC_standard_deviation, MC_mean]
-	"""
-	# First calculate the B-mode map (noiseless)
-	from .PowerMap import MakePower
-	Bpow=MakePower(map_id,map_size=map_size,map_type='B')
 	
-	# Load the relevant window function
+	# Input directory:
 	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
-	mask=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
 	
-	# Compute mean square window function
-	windowFactor=np.mean(mask.data**2.)
-	
-	# Now compute the noise power-map
+	# Compute the noise power map using the B-mode map as a template
 	from .NoisePower import noise_map
-	noiseMap=noise_map(powMap=Bpow.copy(),noise_power=a.noise_power,FWHM=a.FWHM,windowFactor=windowFactor)
+	noiseMap=noise_map(powMap=Bpow.copy(),noise_power=noise_power,FWHM=FWHM,windowFactor=Bpow.windowFactor)
 	
 	# Compute total map
 	totMap=Bpow.copy()
 	totMap.powerMap=Bpow.powerMap+noiseMap.powerMap
 	
-	# Initially using NOISELESS estimators
-	from .KKtest import noisy_estimator
-	est_data=noisy_estimator(totMap.copy(),slope=slope) # compute anisotropy parameters
+	# Apply the KK estimators
+	from .KKtest import zero_estimator
+	A_est,fs_est,fc_est,Afs_est,Afc_est=zero_estimator(totMap.copy(),lMin=lMin,lMax=lMax,slope=slope,factor=1e-10,FWHM=FWHM,noise_power=noise_power,KKmethod=KKmethod,rot=rot)
+	# (Factor is expected monpole amplitude (to speed convergence))
+	
+	# Compute anisotropy fraction and angle
+	ang_est=-rot+0.25*180./np.pi*(np.arctan(Afs_est/Afc_est)) # in degrees
+	frac_est=np.sqrt(fs_est**2.+fc_est**2.)
 		
 	## Run MC Simulations	
 	# First compute 1D power spectrum by binning in annuli
 	from hades.PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.*a.lMax,0.8*a.l_step,binErr=False,windowFactor=windowFactor) # gives central binning l and mean power in annulus using window function corrections
+	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.*a.lMax,0.8*a.l_step,binErr=False,windowFactor=Bpow.windowFactor) 
+	# gives central binning l and mean power in annulus using window function corrections (from unpaddded map)
 	
 	# Compute univariate spline model fit to 1D power spectrum
 	from scipy.interpolate import UnivariateSpline
@@ -64,27 +62,50 @@ def est_and_err(map_id,map_size=a.map_size,sep=a.sep,N_sims=a.N_sims,noise_power
 	def model_power(ell):
 		return 10.**spline_fun(np.log10(ell)) # this estimates 1D spectrum for any ell
 	
-	if False: # testing
-		import matplotlib.pyplot as plt
-		plt.plot(l_cen,np.log10(mean_pow))
-		plt.plot(l_cen,np.log10(model_power(l_cen)))
-		plt.show()
+	# Initialise arrays
+	A_MC,fs_MC,fc_MC,Afs_MC,Afc_MC,epsilon_MC,ang_MC=[],[],[],[],[],[],[]
 	
-	# Now run MC simulation N_sims times
-	MC_data = np.zeros((N_sims,len(est_data)))
+	from hades.NoisePower import single_MC
 	
 	for n in range(N_sims): # for each MC map
-		MC_map=single_MC(totMap.copy(),model_power,windowFactor=windowFactor) # create random map from isotropic spectrum
-		MC_data[n]=noisy_estimator(MC_map.copy(),slope=slope) # compute MC anisotropy parameters  
+		MC_map=single_MC(totMap.copy(),model_power,windowFactor=Bpow.windowFactor) # create random map from isotropic spectrum
+		output=zero_estimator(MC_map.copy(),lMin=lMin,lMax=lMax,slope=slope,factor=1e-10,FWHM=FWHM,noise_power=noise_power,KKmethod=KKmethod) 
+		# compute MC anisotropy parameters  
+		A_MC.append(output[0])
+		fs_MC.append(output[1])
+		fc_MC.append(output[2])
+		Afs_MC.append(output[3])
+		Afc_MC.append(output[4])
+		epsilon_MC.append(np.sqrt(output[1]**2.+output[2]**2.))
+		ang_MC.append(0.25*180./np.pi*np.arctan(output[3]/output[4]))
+		
+	# Compute means and standard deviations
+	A_mean=np.mean(A_MC)
+	A_std=np.std(A_MC)
+	fc_mean=np.mean(fc_MC)
+	fs_mean=np.mean(fs_MC)
+	fc_std=np.std(fc_MC)
+	fs_std=np.std(fs_MC)
+	frac_mean=np.mean(epsilon_MC)
+	frac_std=np.std(epsilon_MC)
+	ang_mean=np.mean(ang_MC)
+	ang_std=np.std(ang_MC)
+	Afs_mean=np.mean(Afs_MC)
+	Afc_mean=np.mean(Afc_MC)
+	Afs_std=np.std(Afs_MC)
+	Afc_std=np.std(Afc_MC)
 	
-	# Compute mean and standard deviation of MC statistics
-	MC_means=np.mean(MC_data,axis=0)
-	MC_std=np.std(MC_data,axis=0)	
-
-	# Regroup output (as described above)
-	output = [[est_data[i],MC_std[i],MC_means[i]] for i in range(len(MC_means))]		
+	# Regroup data
+	Adat=[A_est,A_mean,A_std]
+	fsdat=[fs_est,fs_mean,fs_std]
+	fcdat=[fc_est,fc_mean,fc_std]
+	Afsdat=[Afs_est,Afs_mean,Afs_std]
+	Afcdat=[Afc_est,Afc_mean,Afc_std]
+	fracdat=[frac_est,frac_mean,frac_std]
+	angdat=[ang_est,ang_mean,ang_std]
 	
-	return output
+	# Return all output
+	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat
 	
 
 def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep):
@@ -141,7 +162,7 @@ def zero_padding(tempMap,padding_factor):
 	NB: WCS data is NOT changed by the zero-padding, so will be inaccurate if used.
 	(this doesn't affect any later processes)"""
 	
-	zeroMap=tempMap.copy() # padded map template
+	zeroMap=tempMap.copy() # unpadded map template
 	oldNx=tempMap.Nx
 	oldNy=tempMap.Ny # old Map dimensions
 	
@@ -164,4 +185,204 @@ def zero_padding(tempMap,padding_factor):
 	zeroMap.powerFactor=zeroMap.area/tempMap.area
 	
 	return zeroMap
+	
+# Default parameters
+map_size=a.map_size
+nmin = 0
+nmax = 1e5#1399#3484
+cores = 42
+
+
+if __name__=='__main__':
+     """ Batch process to use all available cores to compute the KK estimators and Gaussian errors using the iterator function below.
+    Inputs are min and max file numbers. Output is saved as npy file"""
+
+     import tqdm
+     import sys
+     import numpy as np
+     import multiprocessing as mp
+     	
+     # Parameters if input from the command line
+     if len(sys.argv)>=2:
+     	map_size=int(sys.argv[1])
+     if len(sys.argv)>=3:
+         nmin = int(sys.argv[2])
+     if len(sys.argv)>=4:
+         nmax = int(sys.argv[3])
+     if len(sys.argv)==5:
+         cores = int(sys.argv[4])
+         
+     print 'Starting estimations for map width = %s degrees' %map_size
+     
+     # Compute map IDs with non-trivial data
+     all_file_ids=np.arange(nmin,nmax+1)
+     import pickle
+     goodMaps=pickle.load(open(a.root_dir+str(map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
+     
+     file_ids=[int(all_file_ids[i]) for i in range(len(all_file_ids)) if goodMaps[i]!=False] # just for correct maps
+     params=[[file_id, map_size] for file_id in file_ids]
+     # Start the multiprocessing
+     p = mp.Pool(processes=cores)
+     
+     # Define iteration function
+     from hades.PaddedPower import iterator
+     
+     # Display progress bar with tqdm
+     r = list(tqdm.tqdm(p.imap(iterator,params),total=len(file_ids)))
+     
+     np.save(a.root_dir+'BICEPnoNoisePaddedMCEstimates%sdeg%s.npy' %(map_size,a.sep),np.array(r))
+     
+
+def iterator(params):
+	""" To run the iterations"""
+	from hades.PaddedPower import padded_estimates
+	out = padded_estimates(int(params[0]),map_size=params[1])
+	print('%s map complete' %params[0])
+	return out
+
+
+def reconstructor(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power):
+	""" Reconstruct and plot data, in PaddedMaps***/ subdirectory."""
+	import os
+	
+	# First create data from batch files if available
+	batchDir=a.root_dir+'BatchData/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power) # for batch files
+	if os.path.exists(batchDir):
+		from hades.batch_maps import reconstruct_array
+		reconstruct_array(map_size=map_size,sep=sep,FWHM=FWHM,noise_power=noise_power)
+	else:
+		return Exception('Data not yet created')
+	
+	# File directory
+	fileDir=a.root_dir+'Maps/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power)
+	
+	dat = np.load(fileDir+'data.npy')
+	N = len(dat)
+	
+	# Construct A,fs,fc arrays
+	A=[d[0][0] for d in dat]
+	fs=[d[1][0] for d in dat]
+	fc=[d[2][0] for d in dat]
+	fs_err=[d[1][2] for d in dat]
+	fc_err=[d[2][2] for d in dat]
+	eps=[d[5][0] for d in dat]
+	ang=[d[6][0] for d in dat]
+	eps_mean=[d[5][1] for d in dat]
+	logA=[np.log10(d[0][0]) for d in dat]
+	ratio=[eps[i]/eps_mean[i] for i in range(len(dat))]
+	
+	f_err=[np.mean([d[1][2],d[2][2]]) for d in dat] # as fs_err=fc_err
+	
+	# Compute angle error
+	ang_err=[f_err[i]/(4.*eps[i])*180./np.pi for i in range(len(A))]
+	
+    	# Compute chi-squared probability
+	def chi2_prob(eps,err):
+		return np.exp(-eps**2./(2.*err**2.))
+	
+	rand_prob=[chi2_prob(eps[i],f_err[i]) for i in range(len(f_err))]
+	rho_log_prob=[-eps[i]**2./(2.*f_err[i]**2.)*np.log10(np.e) for i in range(len(rand_prob))]
+	
+	dat_set=[A,fs,fc,fs_err,fc_err,eps,ang,eps_mean,logA,f_err,ang_err,rand_prob,rho_log_prob,ratio]
+	names=['Monopole Amplitude','fs','fc','fs_err','fc_err','Anisotropy Fraction','Anisotropy Angle',\
+	'Mean MC Anisotropy Fraction','log Monopole Amplitude','f_err','Angle Error','Chi-squared Probability of Isotropy',\
+	'rho: log Isotropy Probability','Ratio of Tile Epsilon to Mean Isotropic Epsilon (epsilon=anisotropy fraction)']	
+	name_str=['A','fs','fc','fs_err','fc_err','epsilon','angle','mean_mc_epsilon','logA','sigma_f','angle_err','rand_prob','log_rho_prob','epsilon_ratio']
+	
+	# Load coordinates of patch centres
+	from .NoisePower import good_coords
+	ra,dec=good_coords(map_size,sep,N)
+	
+    	# Now plot on grid:
+    	import matplotlib.pyplot as plt
+    	import cmocean
+    	
+    	for j in range(len(names)):
+    		plt.figure()
+    		if names[j]=='Angle Error':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,vmax=22.5)
+    		elif names[j]=='rho: log Isotropy Probability':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,vmin=-5)
+    		elif names[j]=='Anisotropy Angle':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,cmap=cmocean.cm.phase)
+    		else:
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+    		plt.title(names[j])
+    		plt.colorbar()
+    		plt.savefig(fileDir+name_str[j]+'.png',bbox_inches='tight')
+    		plt.clf()
+    		plt.close()
+    		
+def isotropic_reconstructor(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power):
+	""" Reconstruct and plot data, in PaddedMaps***/ subdirectory."""
+	import os
+	
+	# First create data from batch files if available
+	batchDir=a.root_dir+'BatchDataIsotropic/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power) # for batch files
+	if os.path.exists(batchDir):
+		from hades.batch_maps import reconstruct_array
+		reconstruct_array(map_size=map_size,sep=sep,FWHM=FWHM,noise_power=noise_power)
+	else:
+		return Exception('Data not yet created')
+	
+	# File directory
+	fileDir=a.root_dir+'MapsIsotropic/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power)
+	
+	dat = np.load(fileDir+'data.npy')
+	N = len(dat)
+	
+	# Construct A,fs,fc arrays
+	A=[d[0][1] for d in dat]
+	fs=[d[1][1] for d in dat]
+	fc=[d[2][1] for d in dat]
+	fs_err=[d[1][2] for d in dat]
+	fc_err=[d[2][2] for d in dat]
+	eps=[d[5][1] for d in dat]
+	ang=[d[6][1] for d in dat]
+	eps_mean=[d[5][1] for d in dat]
+	logA=[np.log10(d[0][1]) for d in dat]
+	ratio=[eps[i]/eps_mean[i] for i in range(len(dat))]
+	
+	f_err=[np.mean([d[1][2],d[2][2]]) for d in dat] # as fs_err=fc_err
+	
+	# Compute angle error
+	ang_err=[f_err[i]/(4.*eps[i])*180./np.pi for i in range(len(A))]
+	
+    	# Compute chi-squared probability
+	def chi2_prob(eps,err):
+		return np.exp(-eps**2./(2.*err**2.))
+	
+	rand_prob=[chi2_prob(eps[i],f_err[i]) for i in range(len(f_err))]
+	rho_log_prob=[-eps[i]**2./(2.*f_err[i]**2.)*np.log10(np.e) for i in range(len(rand_prob))]
+	
+	dat_set=[A,fs,fc,fs_err,fc_err,eps,ang,eps_mean,logA,f_err,ang_err,rand_prob,rho_log_prob,ratio]
+	names=['Monopole Amplitude','fs','fc','fs_err','fc_err','Anisotropy Fraction','Anisotropy Angle',\
+	'Mean MC Anisotropy Fraction','log Monopole Amplitude','f_err','Angle Error','Chi-squared Probability of Isotropy',\
+	'rho: log Isotropy Probability','Ratio of Tile Epsilon to Mean Isotropic Epsilon (epsilon=anisotropy fraction)']	
+	name_str=['A','fs','fc','fs_err','fc_err','epsilon','angle','mean_mc_epsilon','logA','sigma_f','angle_err','rand_prob','log_rho_prob','epsilon_ratio']
+	
+	# Load coordinates of patch centres
+	from .NoisePower import good_coords
+	ra,dec=good_coords(map_size,sep,N)
+	
+    	# Now plot on grid:
+    	import matplotlib.pyplot as plt
+    	import cmocean
+    	
+    	for j in range(len(names)):
+    		plt.figure()
+    		if names[j]=='Angle Error':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,vmax=22.5)
+    		elif names[j]=='rho: log Isotropy Probability':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,vmin=-5)
+    		elif names[j]=='Anisotropy Angle':
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80,cmap=cmocean.cm.phase)
+    		else:
+    			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+    		plt.title(names[j])
+    		plt.colorbar()
+    		plt.savefig(fileDir+name_str[j]+'.png',bbox_inches='tight')
+    		plt.clf()
+    		plt.close()
+    		
 

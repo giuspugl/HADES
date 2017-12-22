@@ -1,0 +1,13 @@
+# batch_maps.sub -- run map creation for each patch
+
+universe		= vanilla
+executable              = /data/ohep2/hades/batch_maps.sh
+arguments               = "$(Process)"
+should_transfer_files   = IF_NEEDED
+when_to_transfer_output = ON_EXIT
+request_memory		= 1000
+log                     = batch_maps.log
+error 			= batch_maps.error
+output			= batch_maps.out
+notification		= never
+queue 1505

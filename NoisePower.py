@@ -303,7 +303,7 @@ def good_coords(map_size,sep,N):
 	Output is RA,dec in degrees. N is no. data points
 	 """
 	import pickle
-	map_dir=a.root_dir+'%sdeg%s/' %(map_size,a.sep)
+	map_dir=a.root_dir+'%sdeg%s/' %(map_size,sep)
     	full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
     	full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
     	goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))
@@ -320,4 +320,23 @@ def good_coords(map_size,sep,N):
     	dec_deg=coords.Angle(decs*u.degree)
 
 	return ra_deg,dec_deg
-	
+
+def locate_coords(ra1,ra2,dec1,dec2,map_size=a.map_size,sep=a.sep):
+	""" Find tile corresponding to some coordinates"""
+	import pickle
+	if ra1<0:
+		ra1+=360.
+	if ra2<0:
+		ra2+=360.
+	map_dir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
+    	full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
+    	goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))
+    	indices=[]
+    	for i in range(len(full_ras)):
+    		if full_ras[i]>ra1 and full_ras[i]<ra2:
+    			if full_decs[i]>dec1 and full_decs[i]<dec2:
+    				if goodMap[i]==True:
+    					indices.append(i)
+    					
+    	return indices
