@@ -16,7 +16,9 @@ def create_good_map_ids():
 
 
 if __name__=='__main__':
-	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
+	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id.
+	
+	MOVED TO WRAPPER.PY NOW!!!!"""
 	import time
 	start_time=time.time()
 	import sys
@@ -24,6 +26,8 @@ if __name__=='__main__':
 	sys.path.append('/data/ohep2/')
 	sys.path.append('/home/ohep2/Masters/')
 	import os
+	
+	return Exception('UsingDepracatedVersion. Use wrapper.py')
 	
 	# First load good IDs:
 	goodIDs=np.load(a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep))
@@ -39,11 +43,11 @@ if __name__=='__main__':
 	print '%s starting for map_id %s' %(batch_id,map_id)
 	
 	# Now run the estimation
-	from hades.PaddedPower import padded_estimates
-	output=padded_estimates(map_id)
+	from hades.wrapper import best_estimates
+	output=best_estimates(map_id)
 	
 	# Save output to file
-	outDir=a.root_dir+'BatchDataIsotropic/%sdeg_%ssep_%sFWHM_%snoise_power/' %(a.map_size,a.sep,a.FWHM,a.noise_power)
+	outDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
@@ -52,12 +56,13 @@ if __name__=='__main__':
 	
 	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
 	
-def reconstruct_array(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power):
+def reconstruct_array(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,\
+	noise_power=a.noise_power,freq=a.freq,delensing_fraction=a.delensing_fraction):
 	""" Code to reconstruct the array from the batch processing"""
 	
 	import os
 	
-	inDir=a.root_dir+'BatchDataIsotropic/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power) # input folder
+	inDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction) # input folder
 	
 	total_list=[]
 	i=0  # iterator to read in all files
@@ -65,7 +70,7 @@ def reconstruct_array(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.no
 		total_list.append(np.load(inDir+'%s.npy' %i))
 		i+=1
 	# Now save output
-	outDir=a.root_dir+'MapsIsotropic/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power)
+	outDir=a.root_dir+'Maps/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction)
 	
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)

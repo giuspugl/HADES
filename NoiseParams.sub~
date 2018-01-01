@@ -3,12 +3,12 @@
 universe		= vanilla
 executable              = /data/ohep2/hades/NoiseParams.sh
 arguments               = "$(Process)"
+get_env			= true
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
-request_memory		= 1000
-log                     = noise_params.log
+request_memory		= 2500
+log                     = /dev/null
 error 			= noise_params.error
 output			= noise_params.out
 notification		= never
-queue 10
-#10455
+queue 33000

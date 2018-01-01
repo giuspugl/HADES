@@ -182,25 +182,66 @@ def MakePower(map_id,map_size=a.map_size,map_type='B'):
         return EE
     elif map_type=='T':
         return TT
+
+def dust_emission_ratio(nu1,nu2=a.reference_frequency,Tdust=a.dust_temperature,beta=a.dust_spectral_index):
+    """ Ratio of dust spectral flux at two frequencies in GHz. 
+    This is a modified black-body spectrum.
+    Default values (dust temperature Tdust in K and spectral index beta) are from Planck XXII.
+    nu2 is a reference dust frequency"""
+    h=6.6261e-34 # planck constant
+    k=1.3806e-11 # boltzmann constant  
+    nu1_Hz=nu1*1e9 # in Hz
+    nu2_Hz=nu2*1e9
+    flux1=nu1_Hz**(3+beta)/(np.exp(h*nu1_Hz/(k*Tdust))-1)
+    flux2=nu2_Hz**(3+beta)/(np.exp(h*nu2_Hz/(k*Tdust))-1)
+    return flux1/flux2
+    
+def central_ell(input_func,l1,l2):
+    """ Semi-analytically compute the central-ell value of a bin using a given expected ell dependence.
+    Inputs: expected function for Cell (including noise etc.) 
+    [l1,l2] range of bin.
+    
+    This just computes the mean of input_func over the annulus by approx. integration, then computes the central ell from the inverse function."""
+    def integrand(ell):
+        return 2*np.pi*input_func(ell)*ell
+    denom = np.pi*(l2**2.-l1**2.) # normalisation
+    dl=0.1
+    ell_vals = np.arange(l1,l2,dl)
+    Cl_vals=integrand(ell_vals)
+    num=np.sum(Cl_vals*dl)
+    from pynverse import inversefunc
+    inv=inversefunc(input_func,domain=[l1,l2])
+    try:
+    	output=inv(num/denom)
+    except ValueError:
+    	output=np.mean([l1,l2])
+    return output
         
-def oneD_binning(powMap,lMin,lMax,l_step,binErr=False,windowFactor=None):
+def oneD_binning(powMap,lMin,lMax,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=None,params=None):
 	""" Compute the one-dimensional power spectrum of a given map from binning in annuli.
 	Inputs: powermap, min.max l and bin size.
 	binErr -> whether to return error in power from binning
-	windowFactor -> <W^2> for window function corrections
+	exactCen -> whether to compute centre of bin semi-analytically
+	C_ell_model -> function modelling the C_ell (inc. lensing etc.)
+	(needed if exactCen=True)
+	
 	Outputs: central l value, binned power, [binned power error] """
 	l_bin = np.arange(lMin,lMax,l_step) # binning positions
 	l_cen, bin_pow = [], [] 
 	if binErr:
 		bin_err=[]
-	
-	if windowFactor==None:
-		raise Exception('No window factor added')
-	
+	if exactCen:
+		from .PowerMap import central_ell
+		def model(l):
+			return C_ell_model(l,params[0],params[1])
+		
 	for i in range(len(l_bin)-1):
-		l_cen.append(0.5*(l_bin[i]+l_bin[i+1])) # central l-value
-		temp=powMap.meanPowerInAnnulus(l_bin[i],l_bin[i+1])
-		bin_pow.append(temp[0]/windowFactor)
+		if exactCen:
+			l_cen.append(central_ell(model,l_bin[i],l_bin[i+1]))
+		else:
+			l_cen.append(0.5*(l_bin[i]+l_bin[i+1]))
+		temp=powMap.meanPowerInAnnulus(l_bin[i],l_bin[i+1],nearestIntegerBinning=False)
+		bin_pow.append(temp[0])
 		if binErr:
 			bin_err.append(temp[1])
 	

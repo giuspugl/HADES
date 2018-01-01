@@ -167,7 +167,9 @@ def reconstructor(map_size=10):
 
     return None    
    
-def zero_estimator(map,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,factor=None,rot=0.,KKmethod=a.KKmethod):
+def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
+	slope=a.slope,factor=None,rot=0.,KKmethod=a.KKmethod,\
+	delensing_fraction=a.delensing_fraction):
 	""" Use KK 14 estimators to find polarisation strength and anisotropy angle via fs,fc parameters.
 	This uses the noise model in hades.NoisePower.noise_model. 
 	A is computed recursively, since S/N ratio depends on it (only weak dependence) as below
@@ -176,51 +178,63 @@ def zero_estimator(map,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_p
  	map_size = width of map in degrees
     	lMin,lMax= fitting range of l
     	slope -> fiducial C_l map slope
-    	rot -> optional angle for pre-rotation of power-space map
+    	rot -> optional angle for pre-rotation of power-space map in degrees.
     	KKmethod -> Boolean for which S/N ratio to apply (true is Kamionkowski/Kovetz version, false is Sherwin version)
+    	delensing_fraction -> efficiency of delensing (0.1-> 90% removed)
+    	factor -> expected amplitude factor (to speed convergence)
     	
     	Outputs:
-    	A,fs,fc, Afs, Afc from estimators
+    	A,fs,fc, Afs, Afc from estimators. NB these are corrected for any map pre-rotation.
     	"""
     	from hades.NoisePower import noise_model
     	
-    	# Compute sky fraction
-    	area = (a.map_size*np.pi/180.)**2. # map area in steradians
-    	f_sky = area/(4.*np.pi)
+    	if KKmethod:
+    		# Compute sky fraction
+    		area = (a.map_size*np.pi/180.)**2. # map area in steradians
+    		f_sky = area/(4.*np.pi)
     	
-    	# First compute the monopole amplitude A for SNR (denoted Afactor)
-    	# This is done recursively since SN depends on A
-    	# (A only weakly depends on the SN factor Afactor, so convergence is quick)
-    	N=0
-    	Afactor=factor
-    	while N<10: # max. number of iterations
-    		A_num=0.
-    		A_den=0.
-    	    	# Construct estimators over all pixels in range
-		for i in range(map.Ny):
-			for j in range(map.Nx):
-				l=map.modLMap[i,j]
-				if l<lMax and l>lMin:
-					fiducial=l**(-slope)
-					noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
-					if KKmethod:
-						sigma_l_sq = 2.*(noise_Cl**2.)/ (f_sky*(2.*l+1.)) 
-        	                		SN = fiducial/np.sqrt(sigma_l_sq)
-        	                	else:
-        	                		SN=(Afactor*fiducial)/(Afactor*fiducial+noise_Cl)    
-        	       			# A estimator
-        	        		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
-        	        		A_den+=SN**2.
-        	lastFactor=Afactor # previous A factor
-        	Afactor=A_num/A_den # new A factor
-        	
-    		if np.abs(Afactor-lastFactor)/Afactor<0.01:
-    			break # approximate convergence reached 
-    		N+=1
-        
-        if N==10:
-        	print 'did not converge with slope: %.3f Afactor: %.3e, last factor: %.3e' %(slope,Afactor,lastFactor)
-        
+    	# Import lensing function (made from CAMB)
+    	from hades.NoisePower import lensed_Cl
+    	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
+    	
+    	if factor==None:
+	    	# First compute the monopole amplitude A for SNR (denoted Afactor)
+	    	# This is done recursively since SN depends on A
+	    	# (A only weakly depends on the SN factor Afactor, so convergence is quick)
+	    	N=0
+	    	Afactor=1e-12
+	    	while N<10: # max. number of iterations
+	    		A_num=0.
+	    		A_den=0.
+	    	    	# Construct estimators over all pixels in range
+			for i in range(map.Ny):
+				for j in range(map.Nx):
+					l=map.modLMap[i,j]
+					if l<lMax and l>lMin:
+						fiducial=l**(-slope)
+						noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+						lens_Cl=Cl_lens_func(l)
+						
+						if KKmethod:
+							sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
+	        	                		SN = fiducial/np.sqrt(sigma_l_sq)
+	        	                	else:
+	        	                		SN=(Afactor*fiducial)/(Afactor*fiducial+noise_Cl+lens_Cl)    
+	        	       			# A estimator
+	        	        		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+	        	        		A_den+=SN**2.
+	        	lastFactor=Afactor # previous A factor
+	        	Afactor=A_num/A_den # new A factor
+	        	
+	    		if np.abs(Afactor-lastFactor)/Afactor<0.03:
+	    			break # approximate convergence reached 
+	    		N+=1
+	        
+	        if N==10:
+	        	print 'Map %s did not converge with slope: %.3f Afactor: %.3e, last factor: %.3e' %(map_id,slope,Afactor,lastFactor)
+	        finalFactor=Afactor
+	else:
+		finalFactor=factor # just use from input      
     	# Initialise other variables
     	A_num, A_den=0.,0.
     	Afs_num,Afs_den=0.,0.
@@ -235,11 +249,15 @@ def zero_estimator(map,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_p
 				ang=(map.thetaMap[i,j]+rot)*np.pi/180. # in radians with optional rotation
 				fiducial=l**(-slope)
 				noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+				
+				lens_Cl=Cl_lens_func(l)
+				
 				if KKmethod:
-					sigma_l_sq = 2.*(noise_Cl**2.)/ (f_sky*(2.*l+1.)) 
-                        		SN = fiducial/np.sqrt(sigma_l_sq)
-                        	else:
-                        		SN=(factor*fiducial)/(Afactor*fiducial+noise_Cl)    
+					sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
+        	                	SN = fiducial/np.sqrt(sigma_l_sq)
+        	                else:
+        	                	SN=(finalFactor*fiducial)/(finalFactor*fiducial+noise_Cl+lens_Cl)    
+				
                			# A estimator
                 		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
                 		A_den+=SN**2.
@@ -256,8 +274,14 @@ def zero_estimator(map,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_p
     	fs=Afs/A
     	fc=Afc/A
     	
-    	return A,fs,fc,Afs,Afc
-
+    	# Now correct for rotation:
+    	rot_rad=rot*np.pi/180. # in radians
+    	fs_corr=fs*np.cos(rot_rad*4.)-fc*np.sin(rot_rad*4.)
+    	fc_corr=fs*np.sin(rot_rad*4.)+fc*np.cos(rot_rad*4.)
+    	Afs_corr=Afs*np.cos(rot_rad*4.)-Afc*np.sin(rot_rad*4.)
+    	Afc_corr=Afs*np.sin(rot_rad*4.)+Afc*np.cos(rot_rad*4.)
+    	
+    	return A,fs_corr,fc_corr,Afs_corr,Afc_corr
     
 def noisy_estimator(map,map_size=a.map_size,lMin=a.lMin,lMax=a.lMax,\
 FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):

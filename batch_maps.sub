@@ -2,12 +2,13 @@
 
 universe		= vanilla
 executable              = /data/ohep2/hades/batch_maps.sh
+getenv			= true
 arguments               = "$(Process)"
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
 request_memory		= 1000
-log                     = batch_maps.log
-error 			= batch_maps.error
+log                     = /dev/null
 output			= batch_maps.out
+error			= batch_maps.error
 notification		= never
-queue 1505
+queue 800

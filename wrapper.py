@@ -20,10 +20,16 @@ if __name__=='__main__':
 		# load if not already created
 		from hades.batch_maps import create_good_map_ids
 		create_good_map_ids()
+		print 'creating good IDs'
 		
 	goodIDs=np.load(goodFile)
 	
 	batch_id=int(sys.argv[1]) # batch_id number
+	
+	if batch_id==len(goodIDs)-2:
+		from hades.NoiseParams import sendMail
+		sendMail('Single Map')
+	
 	
 	if batch_id>len(goodIDs)-1:
 		print 'Process %s terminating' %batch_id
@@ -38,7 +44,7 @@ if __name__=='__main__':
 	output=best_estimates(map_id)
 	
 	# Save output to file
-	outDir=a.root_dir+'BatchData/%sdeg_%ssep_%sFWHM_%snoise_power/' %(a.map_size,a.sep,a.FWHM,a.noise_power)
+	outDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
@@ -50,7 +56,8 @@ if __name__=='__main__':
 
 def best_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,noise_power=a.noise_power,FWHM=a.FWHM,\
-	slope=a.slope,lMin=a.lMin,lMax=a.lMax,KKmethod=a.KKmethod,rot=0.):
+	slope=a.slope,lMin=a.lMin,lMax=a.lMax,KKmethod=a.KKmethod,rot=a.rot,freq=a.freq,\
+	delensing_fraction=a.delensing_fraction):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, using zero-padding.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -64,59 +71,92 @@ def best_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	slope (fiducial slope of C_l isotropic dust dependance)
 	lMin / lMax (range of ell values to apply the estimators over)
 	KKmethod (Boolean, controlling which SNR to use (see KKtest.py))
-	rot (angle to rotate by before applying estimators - for testing)
-	NB: if rot!=0, only ang, A, frac can be used
+	rot (angle to rotate by before applying estimators)
+	freq (desired map frequency; 150 GHz for BICEP, 353 GHz for Vansyngel)
+	delensing_fraction (efficiency of delensing; i.e. 0.1=90% removed)
 	
 	Output: First 6 values: [estimate,isotropic mean, isotropic stdev] for {A,Afs,Afc,fs,fc,str,ang}
 	Final value: full data for N_sims as a sequence of 7 lists for each estimate (each of length N_sims)"""
 	
 	# First compute high-resolution B-mode map from padded-real space map with desired padding ratio
 	from .PaddedPower import MakePaddedPower
-	Bpow=MakePaddedPower(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep)
+	Bpow=MakePaddedPower(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq)
 	
 	# Input directory:
 	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
 	
-	# Compute the noise power map using the B-mode map as a template
-	from .NoisePower import noise_map
-	noiseMap=noise_map(powMap=Bpow.copy(),noise_power=noise_power,FWHM=FWHM,windowFactor=Bpow.windowFactor)
+	# Compute the (noise + lensing) power map using the B-mode map as a template
+	# First compute the total noise (instrument+lensing)
+	from .NoisePower import noise_model,lensed_Cl
+	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction) # function for lensed Cl
+	
+	def total_Cl_noise(l):
+		return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
+	
+	
+	from .RandomField import fill_from_model
+	noiselensedMap=Bpow.copy() # template
+	
+	noiselensedMap.powerMap=fill_from_model(Bpow,total_Cl_noise)
+	
+	#from .NoisePower import noise_map	
+	#noiselensedMap=noise_map(powMap=Bpow.copy(),noise_power=noise_power,FWHM=FWHM,\
+	#,delensing_fraction=delensing_fraction)
 	
 	# Compute total map
 	totMap=Bpow.copy()
-	totMap.powerMap=Bpow.powerMap+noiseMap.powerMap
+	totMap.powerMap=Bpow.powerMap+noiselensedMap.powerMap
 	
 	# Apply the KK estimators
 	from .KKtest import zero_estimator
-	A_est,fs_est,fc_est,Afs_est,Afc_est=zero_estimator(totMap.copy(),lMin=lMin,lMax=lMax,slope=slope,factor=1e-10,FWHM=FWHM,noise_power=noise_power,KKmethod=KKmethod,rot=rot)
-	# (Factor is expected monpole amplitude (to speed convergence))
+	A_est,fs_est,fc_est,Afs_est,Afc_est=zero_estimator(totMap.copy(),map_id,lMin=lMin,\
+		lMax=lMax,slope=slope,factor=None,FWHM=FWHM,noise_power=noise_power,\
+		KKmethod=KKmethod,rot=rot,\
+		delensing_fraction=delensing_fraction)
+	# (Factor is expected monopole amplitude (to speed convergence))
 	
 	# Compute anisotropy fraction and angle
-	ang_est=-rot+0.25*180./np.pi*(np.arctan(Afs_est/Afc_est)) # in degrees
-	frac_est=np.sqrt(fs_est**2.+fc_est**2.)
+	ang_est=0.25*180./np.pi*(np.arctan(Afs_est/Afc_est)) # in degrees
+	frac_est=np.sqrt(fs_est**2.+fc_est**2.) # already corrected for rotation
 		
 	## Run MC Simulations	
-	# First compute 1D power spectrum by binning in annuli
-	from hades.PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.*a.lMax,0.8*a.l_step,binErr=False,windowFactor=Bpow.windowFactor) 
+	
+	# Compute rough semi-analytic C_ell spectrum
+	def analytic_model(ell,A_est,slope):
+		"""Use the estimate for A to construct analytic model.
+		NB: This is just used for finding the centres of the actual binned data.
+		"""
+		return total_Cl_noise(ell)+A_est*ell**(-slope)
+	
+	# Compute 1D power spectrum by binning in annuli
+	from .PowerMap import oneD_binning
+	l_cen,mean_pow = oneD_binning(totMap.copy(),0.8*a.lMin,1.*a.lMax,0.8*a.l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+	
 	# gives central binning l and mean power in annulus using window function corrections (from unpaddded map)
 	
 	# Compute univariate spline model fit to 1D power spectrum
-	from scipy.interpolate import UnivariateSpline
-	spline_fun = UnivariateSpline(np.log10(l_cen),np.log10(mean_pow),k=4) # compute spline of log data
+	#from scipy.interpolate import UnivariateSpline
+	#spline_fun = UnivariateSpline(np.log10(l_cen),np.log10(mean_pow),k=4) # compute spline of log data
 	
-	def model_power(ell):
-		return 10.**spline_fun(np.log10(ell)) # this estimates 1D spectrum for any ell
+	#def model_power(ell):
+	#	return 10.**spline_fun(np.log10(ell)) # this estimates 1D spectrum for any ell
 	
 	# Initialise arrays
 	A_MC,fs_MC,fc_MC,Afs_MC,Afc_MC,epsilon_MC,ang_MC=[],[],[],[],[],[],[]
 	
-	from hades.NoisePower import single_MC
+	#from hades.NoisePower import single_MC
+	from .RandomField import fill_from_Cell
+	MC_map=Bpow.copy()
 	
 	for n in range(N_sims): # for each MC map
 		if n%10==0:
 			print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
-		MC_map=single_MC(totMap.copy(),model_power,windowFactor=Bpow.windowFactor) # create random map from isotropic spectrum
-		output=zero_estimator(MC_map.copy(),lMin=lMin,lMax=lMax,slope=slope,factor=1e-10,FWHM=FWHM,noise_power=noise_power,KKmethod=KKmethod) 
+		MC_map.powerMap=fill_from_Cell(totMap,l_cen,mean_pow)
+		#MC_map=single_MC(totMap.copy(),model_power) # create random map from isotropic spectrum
+		output=zero_estimator(MC_map.copy(),map_id,lMin=lMin,lMax=lMax,\
+			slope=slope,factor=A_est,FWHM=FWHM,noise_power=noise_power,\
+			KKmethod=KKmethod,rot=rot,\
+			delensing_fraction=delensing_fraction) 
 		# compute MC anisotropy parameters  
 		A_MC.append(output[0])
 		fs_MC.append(output[1])
@@ -156,7 +196,8 @@ def best_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	# Return all output
 	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC
 	
-def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,makePlots=False):
+def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,\
+	freq=a.freq,delensing_fraction=a.delensing_fraction,makePlots=False):
 	""" Function to create plots for each tile.
 	MakePlots command creates plots of epsilon histogram in the Maps/HistPlots/ directory.
 	Other plots are saved in the Maps/ directory """
@@ -172,8 +213,8 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 	A_err,Af_err,f_err,ang_err,frac_err,frac_mean=[np.zeros(len(goodMaps)) for _ in range(6)]
 	
 	# Define output directories:
-	outDir=a.root_dir+'Maps/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power)
-	histDir=a.root_dir+'Maps/HistPlots/%sdeg_%ssep_%sFWHM_%snoise_power/' %(map_size,sep,FWHM,noise_power)
+	outDir=a.root_dir+'Maps/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction)
+	histDir=a.root_dir+'Maps/HistPlots/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction)
 	
 	if not os.path.exists(histDir):
 		os.makedirs(histDir)
@@ -186,7 +227,7 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 		map_id=goodMaps[i] # map id number
 		
 		# Load in data from tile
-		data=np.load(a.root_dir+'BatchData/%sdeg_%ssep_%sFWHM_%snoise_power/%s.npy' %(map_size,sep,FWHM,noise_power,i))
+		data=np.load(a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i))
 		
 		# Load in data
 		A[i],fs[i],fc[i],Afs[i],Afc[i],frac[i],ang[i]=[d[0] for d in data[:7]]
@@ -245,6 +286,18 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 	from .NoisePower import good_coords
 	ra,dec=good_coords(map_size,sep,len(goodMaps))
 	
+	# Load in border of BICEP region if necessary:
+	border=False
+	if a.root_dir=='/data/ohep2/WidePatch/':
+		border=True # for convenience
+		from hades.plotTools import BICEP_border
+		temp=BICEP_border(map_size,sep)
+		if temp!=None:
+			edge_ra,edge_dec=temp
+			# to only use cases where border is available
+		else:
+			border=False
+	
 	# Now plot on grid:
 	import cmocean # for angle colorbar
 	for j in range(len(names)):
@@ -255,13 +308,16 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 			s=80,cmap=cmocean.cm.phase)
 		else:
 			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+		if border:
+			plt.plot(edge_ra,edge_dec,c='k') # plot border
 		plt.title(names[j])
 		plt.colorbar()
 		plt.savefig(outDir+file_str[j]+'.png',bbox_inches='tight')
 		plt.clf()
 		plt.close()
 		
-def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,N_sims=a.N_sims):
+def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,
+	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims):
 	"""Compute the global anisotropy over the patch, summing the epsilon values weighted by the S/N.
 	The estimate is assumed Gaussian by Central Limit Theorem.
 	Errors are obtained by computing estimate for many MC sims
@@ -276,7 +332,8 @@ def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noi
 	
 	for i in range(len(goodMaps)):
 		# Load dataset
-		data=np.load(a.root_dir+'BatchData/%sdeg_%ssep_%sFWHM_%snoise_power/%s.npy' %(map_size,sep,FWHM,noise_power,i))		
+		datPath=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i)
+		data=np.load(datPath)		
 		eps_est=data[5][0]
 		eps_MC=data[7][5]
 		sigma_eps=data[5][2]
@@ -285,7 +342,6 @@ def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noi
 		SNR=1./(sigma_eps**2.)
 		epsilon_patch_num+=SNR*eps_est
 		norm+=SNR
-		
 		for j in range(N_sims):
 			epsilon_patch_MC_num[j]+=SNR*eps_MC[j]
 			
@@ -314,7 +370,7 @@ def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noi
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)
-	plt.savefig(outDir+'hist_%sdeg_%ssep_%sFWHM_%snoise_power.png' %(map_size,sep,FWHM,noise_power),bbox_inches='tight')
+	plt.savefig(outDir+'hist_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction),bbox_inches='tight')
 	plt.clf()
 	plt.close()
 		

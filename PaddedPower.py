@@ -108,18 +108,19 @@ def padded_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat
 	
 
-def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep):
+def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq):
     """ Function to create 2D B-mode power map from real space map padded with zeros.
     Input: map_id (tile number)
     map_size (in degrees)
     sep (separation of map centres)
     padding_ratio (ratio of padded map width to original (real-space) map width)
+    freq (experiment frequency (calibrated for 100-353 GHz))
    
     Output: B-mode map in power-space   
     """
     import flipperPol as fp
     
-    inDir=a.root_dir+'%sdeg%s/' %(map_size,a.sep)
+    inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
@@ -147,10 +148,17 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     _,_,_,_,_,_,_,_,BB=fp.fftPol.fourierTEBtoPowerTEB(fT,fE,fB,fT,fE,fB)
     
     # Now account for power loss due to padding:
-    BB.powerMap*=zTmap.powerFactor
+    BB.powerMap*=zTmap.powerFactor # no effect here
     
-    # Store window factor
-    BB.windowFactor=windowFactor
+    # Rescale to correct amplitude using dust SED
+    from .PowerMap import dust_emission_ratio
+    dust_intensity_ratio=dust_emission_ratio(freq)
+    
+    BB.powerMap*=dust_intensity_ratio 
+    
+    # Account for window factor
+    BB.powerMap/=windowFactor
+    BB.windowFactor=windowFactor # store window factor
     
     return BB
     
@@ -162,29 +170,33 @@ def zero_padding(tempMap,padding_factor):
 	NB: WCS data is NOT changed by the zero-padding, so will be inaccurate if used.
 	(this doesn't affect any later processes)"""
 	
-	zeroMap=tempMap.copy() # unpadded map template
-	oldNx=tempMap.Nx
-	oldNy=tempMap.Ny # old Map dimensions
+	if padding_factor==1.: # for no padding for convenience
+		tempMap.powerFactor=1.
+		return tempMap
+	else:
+		zeroMap=tempMap.copy() # unpadded map template
+		oldNx=tempMap.Nx
+		oldNy=tempMap.Ny # old Map dimensions
+		
+		# Apply padding
+		paddingY=int(oldNy*(padding_factor-1.)/2.)
+		paddingX=int(oldNx*(padding_factor-1.)/2.) # no. zeros to add to each edge of map
+		zeroMap.data=np.lib.pad(tempMap.data,((paddingY,paddingY),(paddingX,paddingX)),'constant') # pads with zeros by default
+		
+		# Reconfigure other parameters
+		zeroMap.Ny=len(zeroMap.data)
+		zeroMap.Nx=len(zeroMap.data[0]) # map dimensions
+		zeroMap.area*=(zeroMap.Ny/oldNy)*(zeroMap.Nx/oldNx) # rescale area
+		zeroMap.x1-=oldNx*zeroMap.pixScaleX*180./np.pi # change width in degrees
+		zeroMap.x0+=oldNx*zeroMap.pixScaleX*180./np.pi
+		zeroMap.y0-=oldNy*zeroMap.pixScaleY*180./np.pi
+		zeroMap.y1+=oldNy*zeroMap.pixScaleY*180./np.pi # signs to fit with flipper conventions
+		
+		# Define 'power factor'
+		# Power-space maps must be multiplied by this factor to have correct power
+		zeroMap.powerFactor=zeroMap.area/tempMap.area
 	
-	# Apply padding
-	paddingY=int(oldNy*(padding_factor-1.)/2.)
-	paddingX=int(oldNx*(padding_factor-1.)/2.) # no. zeros to add to each edge of map
-	zeroMap.data=np.lib.pad(tempMap.data,((paddingY,paddingY),(paddingX,paddingX)),'constant') # pads with zeros by default
-	
-	# Reconfigure other parameters
-	zeroMap.Ny=len(zeroMap.data)
-	zeroMap.Nx=len(zeroMap.data[0]) # map dimensions
-	zeroMap.area*=(zeroMap.Ny/oldNy)*(zeroMap.Nx/oldNx) # rescale area
-	zeroMap.x1-=oldNx*zeroMap.pixScaleX*180./np.pi # change width in degrees
-	zeroMap.x0+=oldNx*zeroMap.pixScaleX*180./np.pi
-	zeroMap.y0-=oldNy*zeroMap.pixScaleY*180./np.pi
-	zeroMap.y1+=oldNy*zeroMap.pixScaleY*180./np.pi # signs to fit with flipper conventions
-	
-	# Define 'power factor'
-	# Power-space maps must be multiplied by this factor to have correct power
-	zeroMap.powerFactor=zeroMap.area/tempMap.area
-	
-	return zeroMap
+		return zeroMap
 	
 # Default parameters
 map_size=a.map_size

@@ -7,6 +7,7 @@ a=BICEP()
 nmin = 0
 nmax = 1e5#1399#3484
 cores = 42
+sep=3
 
 if __name__=='__main__':
      """ Batch process to use all available cores to compute the mean sqrt(Q**2+U**2) value for each submap in the BICEP region
@@ -22,29 +23,21 @@ if __name__=='__main__':
          nmin = int(sys.argv[1])
      if len(sys.argv)>=3:
          nmax = int(sys.argv[2])
-     if len(sys.argv)==4:
+     if len(sys.argv)>=4:
          cores = int(sys.argv[3])
+     if len(sys.argv)==5:
+         sep = int(sys.argv[4])
+     print 'sep %s' %sep
+     
      
      # Compute map IDs with non-trivial data
      all_file_ids=np.arange(nmin,nmax+1)
      import pickle
-     goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
+     goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(sep)+'/fvsgoodMap.pkl','rb'))
      
-     file_ids=[int(all_file_ids[i]) for i in range(len(all_file_ids)) if goodMaps[i]!=False] # just for correct maps
+     file_ids=[int(all_file_ids[i]) for i in range(len(goodMaps)) if goodMaps[i]!=False] # just for correct maps
      
-     # Start the multiprocessing
-     p = mp.Pool(processes=cores)
-     
-     # Define iteration function
-     from hades.QUbatch import QUT_strength
-     
-     # Display progress bar with tqdm
-     r = list(tqdm.tqdm(p.imap(QUT_strength,file_ids),total=len(file_ids)))
-     
-     np.save(a.root_dir+'%sdeg%s/QUTstrengths.npy' %(a.map_size,a.sep),np.array(r))
-     
-
-def QUT_strength(map_id,map_size=a.map_size,sep=a.sep):
+     def QUT_strength(map_id,map_size=a.map_size):
 	""" Function to compute mean np.sqrt(Q**2+U**2) and mean(T) for a map patch.
 	Also saves mean window Factor <W^2> for each."""
 	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
@@ -66,6 +59,20 @@ def QUT_strength(map_id,map_size=a.map_size,sep=a.sep):
 	
 	return np.mean(comb_map.data),np.std(comb_map.data),np.mean(Tmap.data),np.std(Tmap.data),np.mean(ang_map.data),np.std(ang_map.data),windowFactor
 	
+     
+     # Start the multiprocessing
+     p = mp.Pool(processes=cores)
+     
+     # Define iteration function
+     #from hades.QUbatch import QUT_strength
+     
+     # Display progress bar with tqdm
+     r = list(tqdm.tqdm(p.imap(QUT_strength,file_ids),total=len(file_ids)))
+     
+     np.save(a.root_dir+'%sdeg%s/QUTstrengths.npy' %(a.map_size,sep),np.array(r))
+     
+
+
 def reconstructor(map_size=a.map_size,sep=a.sep):
 	""" Code to plot the sqrt(Q**2+U**2) and mean(T) data for the BICEP patch and the sky regions tested.
 	Inputs: map_size and centre separation.
