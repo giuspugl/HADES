@@ -189,7 +189,7 @@ def dust_emission_ratio(nu1,nu2=a.reference_frequency,Tdust=a.dust_temperature,b
     Default values (dust temperature Tdust in K and spectral index beta) are from Planck XXII.
     nu2 is a reference dust frequency"""
     h=6.6261e-34 # planck constant
-    k=1.3806e-11 # boltzmann constant  
+    k=1.3806e-23 # boltzmann constant  
     nu1_Hz=nu1*1e9 # in Hz
     nu2_Hz=nu2*1e9
     flux1=nu1_Hz**(3+beta)/(np.exp(h*nu1_Hz/(k*Tdust))-1)

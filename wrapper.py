@@ -16,20 +16,15 @@ if __name__=='__main__':
 	
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
-	if not os.path.exists(goodFile):
-		# load if not already created
-		from hades.batch_maps import create_good_map_ids
-		create_good_map_ids()
-		print 'creating good IDs'
+	#if not os.path.exists(goodFile):
+	# load if not already created
+	from hades.batch_maps import create_good_map_ids
+	create_good_map_ids()
+	print 'creating good IDs'
 		
 	goodIDs=np.load(goodFile)
 	
 	batch_id=int(sys.argv[1]) # batch_id number
-	
-	if batch_id==len(goodIDs)-2:
-		from hades.NoiseParams import sendMail
-		sendMail('Single Map')
-	
 	
 	if batch_id>len(goodIDs)-1:
 		print 'Process %s terminating' %batch_id
@@ -52,6 +47,12 @@ if __name__=='__main__':
 	np.save(outDir+'%s.npy' %batch_id, output) # save output
 	
 	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
+	
+	if batch_id==len(goodIDs)-2:
+		if a.send_email:
+			from hades.NoiseParams import sendMail
+			sendMail('Single Map')
+	
 	
 
 def best_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
@@ -93,28 +94,33 @@ def best_estimates(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,\
 	def total_Cl_noise(l):
 		return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
 	
+	output=np.zeros([a.repeat,5])
 	
-	from .RandomField import fill_from_model
-	noiselensedMap=Bpow.copy() # template
+	# Repeat to see variation due to noise addition
+	for r in range(a.repeat):
+		from .RandomField import fill_from_model
+		noiselensedMap=Bpow.copy() # template
 	
-	noiselensedMap.powerMap=fill_from_model(Bpow,total_Cl_noise)
+		noiselensedMap.powerMap=fill_from_model(Bpow,total_Cl_noise)
 	
-	#from .NoisePower import noise_map	
-	#noiselensedMap=noise_map(powMap=Bpow.copy(),noise_power=noise_power,FWHM=FWHM,\
-	#,delensing_fraction=delensing_fraction)
+		#from .NoisePower import noise_map	
+		#noiselensedMap=noise_map(powMap=Bpow.copy(),noise_power=noise_power,FWHM=FWHM,\
+		#,delensing_fraction=delensing_fraction)
 	
-	# Compute total map
-	totMap=Bpow.copy()
-	totMap.powerMap=Bpow.powerMap+noiselensedMap.powerMap
-	
-	# Apply the KK estimators
-	from .KKtest import zero_estimator
-	A_est,fs_est,fc_est,Afs_est,Afc_est=zero_estimator(totMap.copy(),map_id,lMin=lMin,\
-		lMax=lMax,slope=slope,factor=None,FWHM=FWHM,noise_power=noise_power,\
-		KKmethod=KKmethod,rot=rot,\
-		delensing_fraction=delensing_fraction)
-	# (Factor is expected monopole amplitude (to speed convergence))
-	
+		# Compute total map
+		totMap=Bpow.copy()
+		totMap.powerMap=Bpow.powerMap+noiselensedMap.powerMap
+		
+		# Apply the KK estimators
+		from .KKtest import zero_estimator
+		output[r]=zero_estimator(totMap.copy(),map_id,lMin=lMin,\
+			lMax=lMax,slope=slope,factor=None,FWHM=FWHM,noise_power=noise_power,\
+			KKmethod=KKmethod,rot=rot,\
+			delensing_fraction=delensing_fraction)
+		# (Factor is expected monopole amplitude (to speed convergence))
+		
+		
+	A_est,fs_est,fc_est,Afs_est,Afc_est=np.mean(output,axis=0)
 	# Compute anisotropy fraction and angle
 	ang_est=0.25*180./np.pi*(np.arctan(Afs_est/Afc_est)) # in degrees
 	frac_est=np.sqrt(fs_est**2.+fc_est**2.) # already corrected for rotation
@@ -201,6 +207,9 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 	""" Function to create plots for each tile.
 	MakePlots command creates plots of epsilon histogram in the Maps/HistPlots/ directory.
 	Other plots are saved in the Maps/ directory """
+	import warnings # catch rogue depracation warnings
+	warnings.filterwarnings("ignore", category=DeprecationWarning) 
+	
 	import matplotlib.pyplot as plt
 	from scipy.stats import percentileofscore
 	import os
@@ -278,7 +287,7 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 	
 	# Dataset:
 	dat_set=[A,fs,fc,Afs,Afc,frac,ang,A_err,Af_err,f_err,frac_mean,frac_err,ang_err,probA,probP,logA]
-	names=['Monopole amplitude','fs','fc','Afs','Afc','Anisotropy Fraction','Anisotropy Angle','MC error for A','MC error for Af','MC error for f','MC mean anisotropy fraction','MC error for anisotropy fraction','MC error for angle','Epsilon Isotropic Percentile (Analytic)','Epsilon Isotropic Percentile (Statistical)','log_10(Monopole Amplitude)']
+	names=[r'Monopole amplitude',r'$f_s$',r'$f_c$',r'$Af_s$',r'$Af_c$',r'Anisotropy Fraction, $\epsilon$',r'Anisotropy Angle, $\alpha$',r'MC error for $A$',r'MC error for $Af$',r'MC error for $f$',r'MC mean anisotropy fraction',r'MC error for anisotropy fraction',r'MC error for angle',r'Epsilon Isotropic Percentile, $\rho$, (Analytic)',r'Epsilon Isotropic Percentile, $\rho$, (Statistical)',r'$\log_{10}(A)$']
 	file_str=['A','fs','fc','Afs','Afc','epsilon','angle','A_err','Af_err','f_err',\
 	'epsilon_MC_mean','epsilon_err','ang_err','prob_analyt','prob_stat','logA']
 	
@@ -288,7 +297,7 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 	
 	# Load in border of BICEP region if necessary:
 	border=False
-	if a.root_dir=='/data/ohep2/WidePatch/':
+	if a.root_dir=='/data/ohep2/WidePatch/' or a.root_dir=='/data/ohep2/CleanWidePatch/':
 		border=True # for convenience
 		from hades.plotTools import BICEP_border
 		temp=BICEP_border(map_size,sep)
@@ -297,25 +306,42 @@ def stats_and_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.nois
 			# to only use cases where border is available
 		else:
 			border=False
+	if border!=False:
+		border_coords=[edge_ra,edge_dec]
+	else:
+		border_coords=None # for compatibility
 	
 	# Now plot on grid:
 	import cmocean # for angle colorbar
 	for j in range(len(names)):
 		print 'Generating patch map %s of %s' %(j+1,len(names))
-		plt.figure()
+		cmap='jet'
+		minMax=None
 		if file_str[j]=='angle':
-			plt.scatter(ra,dec,c=dat_set[j],marker='o',\
-			s=80,cmap=cmocean.cm.phase)
-		else:
-			plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
-		if border:
-			plt.plot(edge_ra,edge_dec,c='k') # plot border
-		plt.title(names[j])
-		plt.colorbar()
-		plt.savefig(outDir+file_str[j]+'.png',bbox_inches='tight')
-		plt.clf()
-		plt.close()
-		
+			cmap=cmocean.cm.phase
+		if file_str[j]=='epsilon':
+			vmin=min(dat_set[j])
+			vmax=min([1.,np.percentile(dat_set[j],95)])
+			minMax=[vmin,vmax]
+		from hades.plotTools import skyMap
+		# Create plot
+		skyMap(dat_set[j],ra,dec,cbar_label=names[j],cmap=cmap,minMax=minMax,\
+			border=border_coords,outFile=outDir+file_str[j]+'.png')
+		if False: # old plotting regime depracated
+			plt.figure()
+			if file_str[j]=='angle':
+				plt.scatter(ra,dec,c=dat_set[j],marker='o',\
+				s=80,cmap=cmocean.cm.phase)
+			else:
+				plt.scatter(ra,dec,c=dat_set[j],marker='o',s=80)
+			if border:
+				plt.plot(edge_ra,edge_dec,c='k') # plot border
+			plt.title(names[j])
+			plt.colorbar()
+			plt.savefig(outDir+file_str[j]+'.png',bbox_inches='tight')
+			plt.clf()
+			plt.close()
+			
 def patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,
 	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims):
 	"""Compute the global anisotropy over the patch, summing the epsilon values weighted by the S/N.

@@ -6,9 +6,10 @@ arguments               = "$(Process)"
 get_env			= true
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
-request_memory		= 2500
+request_memory		= 5000
 log                     = /dev/null
 error 			= noise_params.error
 output			= noise_params.out
 notification		= never
-queue 80000
+queue 2410#30000
+#320000

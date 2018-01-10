@@ -6,14 +6,14 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/WidePatch/' # '/data/ohep2/{sims/,BICEP2/,WidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/FullSky/'#'CleanWidePatch/' # '/data/ohep2/{sims/,BICEP2/,WidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
 	sep = 3  # Separation of map centres
 	padding_ratio=1. # padded map width / original map width - no padding here
 	
-	N_sims = 200 # Number of MC sims
+	N_sims = 500 # Number of MC sims
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
 	
 	# Estimator parameters
@@ -21,6 +21,7 @@ class BICEP:
 	lMin = 120.*3./map_size #120.
 	lMax = 2000. # ranges to fit spectrum over 
 	rot=11.25 # pre rotation before applying estimators
+	repeat=1 # repeat application of noise + estimation to see errors
 	
 	# Planck XXII parameters for dust SED
 	dust_temperature = 19.6
@@ -37,16 +38,21 @@ class BICEP:
 	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensing.npz'
-	delensing_fraction = 1. # efficiency of delensing -> 1 = no delensing
+	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
 	
 	# Fiducial C_l 
 	slope=2.42 # C_l^f power law slope (from Planck X.X.X. paper)
 	
+	# NoiseParamsSpace parameters
+	remakeErrors=False
+	noi_par_NoisePower=np.arange(1e-60,5.1,0.1)#'0.2) #)np.arange(1e-30,2.1,0.16)#np.arange(1e-30,5.1,0.4)
+	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
 	
 	## OTHER TESTING PARAMETERS
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
+	send_email=True # send email on completion
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)
 	rotation_angles=np.arange(0,22.5,0.9)
@@ -67,6 +73,4 @@ class BICEP:
 	hyp_slope=np.arange(2.2,3.0,0.2)
 	hyp_map_size=np.array([2,3,5])
 	
-	# NoiseParamsSpace parameters
-	noi_par_NoisePower=np.arange(1e-30,5.1,0.4)
-	noi_par_FWHM=np.arange(0,31,2.5)
+	

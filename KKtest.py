@@ -204,27 +204,44 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 	    	N=0
 	    	Afactor=1e-12
 	    	while N<10: # max. number of iterations
-	    		A_num=0.
-	    		A_den=0.
-	    	    	# Construct estimators over all pixels in range
-			for i in range(map.Ny):
-				for j in range(map.Nx):
-					l=map.modLMap[i,j]
-					if l<lMax and l>lMin:
-						fiducial=l**(-slope)
-						noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
-						lens_Cl=Cl_lens_func(l)
-						
-						if KKmethod:
-							sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
-	        	                		SN = fiducial/np.sqrt(sigma_l_sq)
-	        	                	else:
-	        	                		SN=(Afactor*fiducial)/(Afactor*fiducial+noise_Cl+lens_Cl)    
-	        	       			# A estimator
-	        	        		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
-	        	        		A_den+=SN**2.
-	        	lastFactor=Afactor # previous A factor
-	        	Afactor=A_num/A_den # new A factor
+	    	
+	    		if True:
+				goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax))
+				lMap=map.modLMap.ravel()[goodPix]
+				powerMap=map.powerMap.ravel()[goodPix]
+				
+				noiseClmap=noise_model(lMap,FWHM=FWHM,noise_power=noise_power)
+				lensClmap=Cl_lens_func(lMap)
+				fiducialMap=lMap**(-slope)
+				SN=(Afactor*fiducialMap)/(Afactor*fiducialMap+noiseClmap+lensClmap)
+				
+				Anum=np.sum(powerMap/fiducialMap*(SN**2.))
+				Aden=np.sum(SN**2.)
+				lastFactor=Afactor
+				Afactor=Anum/Aden
+				
+	    		else: # depracated
+		    		A_num=0.
+		    		A_den=0.
+		    	    	# Construct estimators over all pixels in range
+				for i in range(map.Ny):
+					for j in range(map.Nx):
+						l=map.modLMap[i,j]
+						if l<lMax and l>lMin:
+							fiducial=l**(-slope)
+							noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+							lens_Cl=Cl_lens_func(l)
+							
+							if KKmethod:
+								sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
+		        	                		SN = fiducial/np.sqrt(sigma_l_sq)
+		        	                	else:
+		        	                		SN=(Afactor*fiducial)/(Afactor*fiducial+noise_Cl+lens_Cl)    
+		        	       			# A estimator
+		        	        		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+		        	        		A_den+=SN**2.
+		        	lastFactor=Afactor # previous A factor
+		        	Afactor=A_num/A_den # new A factor
 	        	
 	    		if np.abs(Afactor-lastFactor)/Afactor<0.03:
 	    			break # approximate convergence reached 
@@ -235,44 +252,72 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 	        finalFactor=Afactor
 	else:
 		finalFactor=factor # just use from input      
-    	# Initialise other variables
-    	A_num, A_den=0.,0.
-    	Afs_num,Afs_den=0.,0.
-    	Afc_num,Afc_den=0.,0.
+    	
     	# NB: we recompute A so that all best estimators use the same SNR
     	
 	# Construct estimators for fs, fc over all pixels in range
-	for i in range(map.Ny):
-		for j in range(map.Nx):
-			l=map.modLMap[i,j]
-			if l<lMax and l>lMin:
-				ang=(map.thetaMap[i,j]+rot)*np.pi/180. # in radians with optional rotation
-				fiducial=l**(-slope)
-				noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
-				
-				lens_Cl=Cl_lens_func(l)
-				
-				if KKmethod:
-					sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
-        	                	SN = fiducial/np.sqrt(sigma_l_sq)
-        	                else:
-        	                	SN=(finalFactor*fiducial)/(finalFactor*fiducial+noise_Cl+lens_Cl)    
-				
-               			# A estimator
-                		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
-                		A_den+=SN**2.
-                		# Afc estimator
-                		Afc_num+=map.powerMap[i,j]/fiducial*(np.cos(4.*ang)*SN**2.)
-                		Afc_den+=(SN*np.cos(4.*ang))**2.
-                		# Afs estimator
-                		Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
-                		Afs_den+=(SN*np.sin(4.*ang))**2.
-                
-    	A=A_num/A_den
-    	Afs=Afs_num/Afs_den
-    	Afc=Afc_num/Afc_den
-    	fs=Afs/A
-    	fc=Afc/A
+	if True:
+		goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax))
+		angMap=(map.thetaMap.ravel()[goodPix]+rot*np.ones_like(map.thetaMap.ravel()[goodPix]))*np.pi/180.
+		cosMap=np.cos(4*angMap)
+		sinMap=np.sin(4*angMap)
+		lMap=map.modLMap.ravel()[goodPix]
+		powerMap=map.powerMap.ravel()[goodPix]
+		
+		noiseClmap=noise_model(lMap,FWHM=FWHM,noise_power=noise_power)
+		lensClmap=Cl_lens_func(lMap)
+		fiducialMap=lMap**(-slope)
+		SN=(finalFactor*fiducialMap)/(finalFactor*fiducialMap+noiseClmap+lensClmap)
+		
+		Anum=np.sum(powerMap/fiducialMap*(SN**2.))
+		Aden=np.sum(SN**2.)
+		Afcnum=np.sum(powerMap*cosMap/fiducialMap*(SN**2.))
+		Afcden=np.sum((SN*cosMap)**2.)
+		Afsnum=np.sum(powerMap*sinMap/fiducialMap*(SN**2.))
+		Afsden=np.sum((SN*sinMap)**2.)
+		A=Anum/Aden
+		Afc=Afcnum/Afcden
+		Afs=Afsnum/Afsden
+		fs=Afs/A
+		fc=Afc/A
+	
+	if False: # depracated method
+		# Initialise other variables
+	    	A_num, A_den=0.,0.
+	    	Afs_num,Afs_den=0.,0.
+	    	Afc_num,Afc_den=0.,0.
+	    	
+		for i in range(map.Ny):
+			for j in range(map.Nx):
+				l=map.modLMap[i,j]
+				if l<lMax and l>lMin:
+					ang=(map.thetaMap[i,j]+rot)*np.pi/180. # in radians with optional rotation
+					fiducial=l**(-slope)
+					noise_Cl=noise_model(l,FWHM=FWHM,noise_power=noise_power)
+					
+					lens_Cl=Cl_lens_func(l)
+					
+					if KKmethod:
+						sigma_l_sq = 2.*((noise_Cl+lens_Cl)**2.)/ (f_sky*(2.*l+1.)) 
+	        	                	SN = fiducial/np.sqrt(sigma_l_sq)
+	        	                else:
+	        	                	SN=(finalFactor*fiducial)/(finalFactor*fiducial+noise_Cl+lens_Cl)    
+					
+	               			# A estimator
+	                		A_num+=map.powerMap[i,j]/fiducial*(SN**2.)
+	                		A_den+=SN**2.
+	                		# Afc estimator
+	                		Afc_num+=map.powerMap[i,j]/fiducial*(np.cos(4.*ang)*SN**2.)
+	                		Afc_den+=(SN*np.cos(4.*ang))**2.
+	                		# Afs estimator
+	                		Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
+	                		Afs_den+=(SN*np.sin(4.*ang))**2.
+	                
+	    	A=A_num/A_den
+	    	Afs=Afs_num/Afs_den
+	    	Afc=Afc_num/Afc_den
+	    	fs=Afs/A
+	    	fc=Afc/A
     	
     	# Now correct for rotation:
     	rot_rad=rot*np.pi/180. # in radians

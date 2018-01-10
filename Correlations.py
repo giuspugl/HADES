@@ -1,0 +1,106 @@
+if __name__=='__main__':
+	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
+	import time
+	start_time=time.time()
+	import sys
+	import pickle
+	sys.path.append('/data/ohep2/')
+	sys.path.append('/home/ohep2/Masters/')
+	import os
+	import numpy as np
+	from hades.params import BICEP
+	a=BICEP()
+	
+	# First load good IDs:
+	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
+	if not os.path.exists(goodFile):
+		# load if not already created
+		from hades.batch_maps import create_good_map_ids
+		create_good_map_ids()
+		print 'creating good IDs'
+		
+	goodIDs=np.load(goodFile)
+	
+	
+	freqs=np.arange(50,500,50)
+	maxID=len(goodIDs)*len(freqs)
+	
+	
+	batch_id=int(sys.argv[1]) # batch_id number
+	
+	freqID=batch_id//len(goodIDs)
+	freq=freqs[freqID] # frequency for test
+	
+	if batch_id>maxID-1:
+		print 'Process %s terminating' %batch_id
+		sys.exit() # stop here
+	
+	map_id=goodIDs[batch_id%len(goodIDs)] # this defines the tile used here
+	
+	print '%s starting for map_id %s, frequency %s' %(batch_id,map_id,freq)
+	
+	# Now run the estimation
+	from hades.wrapper import best_estimates
+	output=best_estimates(map_id,freq=freq)
+	
+	# Save output to file
+	outDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	
+	if not os.path.exists(outDir): # make directory
+		os.makedirs(outDir)
+		
+	np.save(outDir+'%s.npy' %(batch_id%len(goodIDs)), output) # save output
+	
+	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
+	
+	if batch_id==maxID-2:
+		if a.send_email:
+			from hades.NoiseParams import sendMail
+			sendMail('Single Map')
+
+
+def reconstructor(map_size,sep,root_dir):
+	""" Reconstruct the patch epsilon values for different frequencies."""
+	from hades.params import BICEP
+	a=BICEP()
+	import numpy as np
+	
+	# Load good ids
+	goodFile=root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep)
+	goodIDs=np.load(goodFile)
+	
+	freqs=np.arange(50,500,50)
+	sig=np.zeros(len(freqs))
+	meanA=np.zeros(len(freqs))
+	for fi,f in enumerate(freqs):
+		# Load data
+		inDir=root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(f,map_size,sep,a.FWHM,a.noise_power,a.delensing_fraction)
+		eps=[]
+		A_err=[]
+		A=[]
+		eps_err=[]
+		eps_MC=[]
+		for i in range(len(goodIDs)):
+			dat=np.load(inDir+'%s.npy' %i)
+			A.append(dat[0][0])
+			A_err.append(dat[0][2])
+			eps.append(dat[5][0])
+			eps_err.append(dat[5][2])
+			eps_MC.append(dat[7][5])
+		A=np.array(A)
+		A_err=np.array(A_err)
+		eps=np.array(eps)
+		eps_err=np.array(eps_err)
+		patch_eps=np.sum(eps/eps_err**2.)/np.sum(eps_err**-2.)
+		patch_eps_MC=[]
+		eps_MC=np.array(eps_MC)
+		for j in range(len(eps_MC[0])):
+			this_MC=[e[j] for e in eps_MC]
+			patch_eps_MC.append(np.sum(this_MC/eps_err**2.)/np.sum(eps_err**-2.))
+		patch_eps_MC=np.array(patch_eps_MC)
+		mu=np.mean(patch_eps_MC,axis=0)
+		std=np.std(patch_eps_MC,axis=0)
+		sig[fi]=(patch_eps-mu)/std
+		meanA[fi]=np.sum(A/A_err**2.)/np.sum(1./A_err**2.)
+		
+	return freqs,sig,meanA

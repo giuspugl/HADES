@@ -26,25 +26,26 @@ if __name__=='__main__':
 	
 	# First load in parameters
 	from hades.NoiseParams import create_params
-	LEN=create_params()
-	
-	if index<LEN:
-		delensing_fraction=0.1
-	elif (index>=LEN) and (index<2*LEN):
-		 delensing_fraction=1.
-		 index-=LEN
+	if not a.remakeErrors:
+		LEN=create_params()
+		
+		if index<LEN:
+			delensing_fraction=1.0
+		elif (index>=LEN) and (index<2*LEN):
+			 delensing_fraction=0.1
+			 index-=LEN
+		else:
+			print 'at end of data'
+			sys.exit()
 	else:
-		print 'at end of data'
-		sys.exit()
-		 
+		delensing_fraction=a.delensing_fraction
+		errFiles=np.load(a.root_dir+'ErrorFiles_f%s_d%s.npy' %(a.freq,delensing_fraction))
+		LEN=len(errFiles)
+		index=errFiles[index] # use new indexing
+		
+		
 	paramFile=np.load(a.root_dir+'%sdeg%sBatchNoiseParams.npz' %(a.map_size,a.sep))
 	
-	if index==LEN-1:
-		from hades.NoiseParams import sendMail
-		sendMail('Noise Parameter - Delensing %s' %delensing_fraction)
-	if index==2*LEN-1:
-		from hades.NoiseParams import sendMail
-		sendMail('Noise Parameter - Delensing %s' %delensing_fraction)
 		
 	map_id=paramFile['map_id'][index]
 	noise_power=paramFile['noise_power'][index]
@@ -55,7 +56,7 @@ if __name__=='__main__':
 	
 	tries=0 # retry if error
 	
-	while tries<2:
+	while tries<1: # depracated
 		
 		# Now compute the estimators:
 		from hades.wrapper import best_estimates
@@ -84,6 +85,14 @@ if __name__=='__main__':
 	
 	print 'Job %s of %s complete in %s seconds' %(index+1,length,time.time()-start_time)
 	
+	# send email notification
+	if index==LEN-1:
+		from hades.NoiseParams import sendMail
+		sendMail('Noise Parameter - Delensing %s' %delensing_fraction)
+	if index==2*LEN-1:
+		from hades.NoiseParams import sendMail
+		sendMail('Noise Parameter - Delensing %s' %delensing_fraction)
+	
 	
 def reconstruct_epsilon(map_size=a.map_size,sep=a.sep,freq=a.freq,delensing_fraction=a.delensing_fraction):
 	import os
@@ -102,6 +111,8 @@ def reconstruct_epsilon(map_size=a.map_size,sep=a.sep,freq=a.freq,delensing_frac
 	norm_MC=np.zeros_like(eps_MC_num)
 	
 	inDir=a.root_dir+'NoiseParamsBatch_d%s/' %delensing_fraction
+	
+	errFiles=[] # runs with errors
 	
 	# Iterate over parameter number:
 	for index in range(len(paramFile['map_id'])):
@@ -123,6 +134,7 @@ def reconstruct_epsilon(map_size=a.map_size,sep=a.sep,freq=a.freq,delensing_frac
 			print 'dodgy dat at index %s' %index
 			errTag=True # to catch errors from dodgy data
 			eps_MC=np.zeros(a.N_sims)
+			errFiles.append(index)
 		else:
 			errTag=False
 		dat.close()
@@ -153,13 +165,16 @@ def reconstruct_epsilon(map_size=a.map_size,sep=a.sep,freq=a.freq,delensing_frac
 	sig=(patch_eps-np.mean(patch_eps_MC,axis=2))/np.std(patch_eps_MC,axis=2)
 	
 	# Save output
+	np.save(a.root_dir+'ErrorFiles_f%s_d%s.npz' %(freq,delensing_fraction),errFiles)
+	
 	np.savez(a.root_dir+'PatchEpsilonNoiseParams_f%s_d%s.npz' %(freq,delensing_fraction),\
 	eps=patch_eps,eps_MC=patch_eps_MC,sig=sig,FWHM=fwhm_arr,noise_power=power_arr)
 	
 def noise_params_plot(map_size=a.map_size,sep=a.sep,\
-	delensing_fraction=a.delensing_fraction,freq=a.freq,createData=True):
+	delensing_fraction=a.delensing_fraction,freq=a.freq,createData=True,S=110):
 	""" Create a 2D plot of mean epsilon for patch against FWHM and noise-power noise parameters.
 	Input: createData- > whether to reconstruct from batch output files or just read from file
+	S -> pixel size in plot
 	Plot is saved in NoiseParamsPlot/ directory"""
 	import matplotlib.pyplot as plt
 	import os
@@ -189,9 +204,8 @@ def noise_params_plot(map_size=a.map_size,sep=a.sep,\
 	noise_power=patch_dat['noise_power']
 	patch_dat.close()
 	
-	XLIM=[-0.1,5.95]
-	YLIM=[-0.5,35]
-	S=700
+	XLIM=[min(noise_power.ravel())-0.2,max(noise_power.ravel())+0.2]#[-0.1,5.95]
+	YLIM=[min(FWHM.ravel())-0.3,max(FWHM.ravel())+0.3]#[-0.5,35]
 	
 	# Create plot
 	plt.figure()
@@ -212,15 +226,17 @@ def noise_params_plot(map_size=a.map_size,sep=a.sep,\
 	
 	# Create plot 2
 	plt.figure()
+	plt.rc('text', usetex=True)
+	plt.rc('font', family='serif')
 	plt.scatter(noise_power,FWHM,c=sig_arr,s=S,marker='s',edgecolors='face',alpha=0.8)
 	cbar=plt.colorbar()
 	CS=plt.contour(noise_power,FWHM,sig_arr,levels=[5,8],colors='k',linestyles='--',alpha=0.8)
 	plt.clabel(CS,colors='k',fontsize=14,fmt='%d')
 	plt.plot(1,1.5,c='k',marker='*',ms=20)
-	plt.plot(3,15,c='k',marker='*',ms=20)
+	plt.plot(5,30,c='k',marker='*',ms=20)
 	plt.ylabel('FWHM / arcmin')
-	plt.xlabel('Noise-Power / uK-arcmin')
-	plt.title('Epsilon Significance')
+	plt.xlabel(r'Noise-Power / $\mu$K-arcmin')
+	plt.title('Significance of Patch Epsilon Detection')
 	plt.xlim(XLIM)
 	plt.ylim(YLIM)
 	# Save plot
