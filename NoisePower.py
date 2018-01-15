@@ -321,12 +321,12 @@ def chi2_reconstructor(map_size=a.map_size,sep=a.sep):
     		plt.clf()
     		plt.close()
     		
-def good_coords(map_size,sep,N):
+def good_coords(map_size,sep,N,root_dir=a.root_dir):
 	""" Compute RA/dec coordinates in correct patch.
 	Output is RA,dec in degrees. N is no. data points
 	 """
 	import pickle
-	map_dir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	map_dir=root_dir+'%sdeg%s/' %(map_size,sep)
     	full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
     	full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
     	goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))

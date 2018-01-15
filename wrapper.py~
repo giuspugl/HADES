@@ -14,17 +14,26 @@ if __name__=='__main__':
 	sys.path.append('/home/ohep2/Masters/')
 	import os
 	
+	batch_id=int(sys.argv[1]) # batch_id number
+	
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
-	if not os.path.exists(goodFile):
-		# load if not already created
-		from hades.batch_maps import create_good_map_ids
-		create_good_map_ids()
-		print 'creating good IDs'
+	
+	outDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	
+	#import os,sys
+	#if os.path.exists(outDir+'%s.npy' %batch_id):
+	#	sys.exit()
+	if batch_id<110: # create first time
+	
+	#if not os.path.exists(goodFile):
+	# load if not already created
+	from hades.batch_maps import create_good_map_ids
+	create_good_map_ids()
+	print 'creating good IDs'
 		
 	goodIDs=np.load(goodFile)
 	
-	batch_id=int(sys.argv[1]) # batch_id number
 	
 	if batch_id>len(goodIDs)-1:
 		print 'Process %s terminating' %batch_id
@@ -33,14 +42,13 @@ if __name__=='__main__':
 	map_id=goodIDs[batch_id] # this defines the tile used here
 	
 	print '%s starting for map_id %s' %(batch_id,map_id)
-	
+
+		
 	# Now run the estimation
 	from hades.wrapper import best_estimates
 	output=best_estimates(map_id)
 	
 	# Save output to file
-	outDir=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
-	
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
 		

@@ -51,11 +51,12 @@ if __name__=='__main__':
 	# Calculate power
 	comb_map=Qmap.copy()
 	ang_map=Qmap.copy()
+	windowFactor=np.mean(maskMap.data**2.)
+	
 	for i in range(len(comb_map.data)):
-		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)
+		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)/windowFactor
 		ang_map.data[i]=0.5*np.arctan(Qmap.data[i]/Umap.data[i])*180./np.pi # angle in radians
 		
-	windowFactor=np.mean(maskMap.data**2.)
 	
 	return np.mean(comb_map.data),np.std(comb_map.data),np.mean(Tmap.data),np.std(Tmap.data),np.mean(ang_map.data),np.std(ang_map.data),windowFactor
 	
@@ -64,7 +65,7 @@ if __name__=='__main__':
      p = mp.Pool(processes=cores)
      
      # Define iteration function
-     from hades.QUbatch import QUT_strength
+     #from hades.QUbatch import QUT_strength
      
      # Display progress bar with tqdm
      r = list(tqdm.tqdm(p.imap(QUT_strength,file_ids),total=len(file_ids)))

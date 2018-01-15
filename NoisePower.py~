@@ -135,7 +135,7 @@ def lensed_Cl(delensing_fraction=a.delensing_fraction):
 	return Cl_interp
 	
 def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
-	delensing_fraction=a.delensing_fraction,useLensing=a.useLensing):
+	delensing_fraction=a.delensing_fraction):
 	""" Create a Gaussian random noise power map from a given noise profile + lensing Cl from CAMB.
 	NB: either real OR power map needs to be specified as template (power map faster)
 	
@@ -145,7 +145,6 @@ def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise
 	FWHM/noise_power -> noise parameters (see noise_model() )
 	windowFactor -> <W^2> for window function needed for window corrections
 	delensing_fraction -> efficiency of lensing removal (90% removed -> 0.1)
-	useLensing -> whether to include lensing effects
 	
 	Output: power2D instance with Gaussian random noise power matching given C_l	
 	"""
@@ -161,19 +160,14 @@ def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise
 		powerMap=powMap.copy() # to avoid rewriting
 			
 	data = np.ones_like(powerMap.powerMap)*1.e-30 # for pixels out of range
-	
-	if useLensing:
-		from .NoisePower import lensed_Cl
-		Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction) # function for lensed Cl
+	from .NoisePower import lensed_Cl
+	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction) # function for lensed Cl
 	
 	for i in range(len(data)):
 		for j in range(len(data[i])):
 			l = powerMap.modLMap[i][j] # (modulus of l)
 			if l>0.5*lMin and l<1.2*lMax: # if in correct range
-				if useLensing:
-					Cl_lens=Cl_lens_func(l)
-				else:
-					Cl_lens=0.
+				Cl_lens=Cl_lens_func(l)
 				# Set Gaussian variance of Cl_lens+Cl_noise
 				var=Cl_lens+noise_model(l,FWHM=FWHM,noise_power=noise_power) 
 				amplitude = np.random.normal(loc=0.0,scale=np.sqrt(var)) # random 
