@@ -2,7 +2,7 @@ import numpy as np
 from .params import BICEP
 a=BICEP()
 
-def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin):
+def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,err=None):
 	""" Function to fill a power map with a Gaussian random field implementation of an input Cell_BB spectrum.
 	
 	This is adapted from flipper.LiteMap.FillWithGaussianRandomField
@@ -10,6 +10,8 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin):
 	powerMap (for output)
 	ell - rnage of ell for Cell
 	Cell - spectrum (NB: not normalised to l(l+1)C_ell/2pi)
+	lMin - minimum ell pixel to fill
+	err - array with errors on Cell
 	
 	Output: PowerMap with GRF
 	"""
@@ -37,15 +39,19 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin):
 	
 	# Fit input Cell to spline
 	from scipy.interpolate import UnivariateSpline
-	spl=UnivariateSpline(ell,np.log10(Cell))
+	if err!=None:
+		log_err=np.array(err)/np.array(Cell) # compute error in log space
+	else:
+		log_err=1. # uniform weighting
+	spl=UnivariateSpline(ell,np.log(Cell),k=5,w=1./log_err**2.) # use a quintic spline here with inverse variance error
 	ll=np.ravel(modLMap)
-	
-	kk=10.**spl(ll)
+	kk=np.ones_like(ll)*1e-20
 	
 	# Apply filtering
 	idhi=np.where(ll>max(ell))
 	idlo=np.where(ll<lMin)
 	idgood=np.where((ll<max(ell))&(ll>lMin))
+	kk[idgood]=np.exp(spl(ll[idgood]))
 	kk[idhi]=min(kk[idgood]) # set unwanted values to small value
 	kk[idlo]=min(kk[idgood])
 	
@@ -62,7 +68,7 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin):
 	
 	return pMap
 
-def fill_from_model(powerMap,model,lMin=0.9*a.lMin,lMax=1.1*a.lMax):
+def fill_from_model(powerMap,model,lMin=a.lMin,lMax=a.lMax):
 	""" Function to fill a power map with a Gaussian random field implementation of an input Cell_BB spectrum.
 	
 	This is adapted from flipper.LiteMap.FillWithGaussianRandomField

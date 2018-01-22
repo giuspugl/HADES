@@ -169,7 +169,7 @@ def reconstructor(map_size=10):
    
 def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
 	slope=a.slope,factor=None,rot=0.,KKmethod=a.KKmethod,\
-	delensing_fraction=a.delensing_fraction):
+	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors):
 	""" Use KK 14 estimators to find polarisation strength and anisotropy angle via fs,fc parameters.
 	This uses the noise model in hades.NoisePower.noise_model. 
 	A is computed recursively, since S/N ratio depends on it (only weak dependence) as below
@@ -182,10 +182,12 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
     	KKmethod -> Boolean for which S/N ratio to apply (true is Kamionkowski/Kovetz version, false is Sherwin version)
     	delensing_fraction -> efficiency of delensing (0.1-> 90% removed)
     	factor -> expected amplitude factor (to speed convergence)
+    	useTensors -> Boolean whether to include r = 0.1 tensor modes from IGWs
     	
     	Outputs:
     	A,fs,fc, Afs, Afc from estimators. NB these are corrected for any map pre-rotation.
     	"""
+    	raise Exception('These are not suitable for high-noise')
     	from hades.NoisePower import noise_model
     	
     	if KKmethod:
@@ -194,8 +196,9 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
     		f_sky = area/(4.*np.pi)
     	
     	# Import lensing function (made from CAMB)
-    	from hades.NoisePower import lensed_Cl
+    	from hades.NoisePower import lensed_Cl,r_Cl
     	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
+    	Cl_r_func=r_Cl()
     	
     	if factor==None:
 	    	# First compute the monopole amplitude A for SNR (denoted Afactor)
@@ -212,8 +215,12 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 				
 				noiseClmap=noise_model(lMap,FWHM=FWHM,noise_power=noise_power)
 				lensClmap=Cl_lens_func(lMap)
+				if useTensors:
+					rClmap=Cl_r_func(lMap)
+				else:
+					rClmap=np.zeros_like(lensClmap)
 				fiducialMap=lMap**(-slope)
-				SN=(Afactor*fiducialMap)/(Afactor*fiducialMap+noiseClmap+lensClmap)
+				SN=(Afactor*fiducialMap)/(Afactor*fiducialMap+noiseClmap+lensClmap+rClmap)
 				
 				Anum=np.sum(powerMap/fiducialMap*(SN**2.))
 				Aden=np.sum(SN**2.)
@@ -221,6 +228,7 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 				Afactor=Anum/Aden
 				
 	    		else: # depracated
+	    			raise Exception('DEPRACATED METHOD in KKtest')
 		    		A_num=0.
 		    		A_den=0.
 		    	    	# Construct estimators over all pixels in range
@@ -243,7 +251,7 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 		        	lastFactor=Afactor # previous A factor
 		        	Afactor=A_num/A_den # new A factor
 	        	
-	    		if np.abs(Afactor-lastFactor)/Afactor<0.03:
+	    		if np.abs(Afactor-lastFactor)/Afactor<0.01:
 	    			break # approximate convergence reached 
 	    		N+=1
 	        
@@ -255,7 +263,7 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
     	
     	# NB: we recompute A so that all best estimators use the same SNR
     	
-	# Construct estimators for fs, fc over all pixels in range
+	# Construct estimators for Afs, Afc over all pixels in range
 	if True:
 		goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax))
 		angMap=(map.thetaMap.ravel()[goodPix]+rot*np.ones_like(map.thetaMap.ravel()[goodPix]))*np.pi/180.
@@ -266,23 +274,28 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 		
 		noiseClmap=noise_model(lMap,FWHM=FWHM,noise_power=noise_power)
 		lensClmap=Cl_lens_func(lMap)
+		if useTensors:
+			rClmap=Cl_r_func(lMap)
+		else:
+			rClmap=np.zeros_like(lensClmap)
 		fiducialMap=lMap**(-slope)
-		SN=(finalFactor*fiducialMap)/(finalFactor*fiducialMap+noiseClmap+lensClmap)
+		SN=(finalFactor*fiducialMap)/(finalFactor*fiducialMap+noiseClmap+lensClmap+rClmap)
 		
-		Anum=np.sum(powerMap/fiducialMap*(SN**2.))
+		Anum=np.sum(powerMap/fiducialMap*(SN**2.))#  biased monopole power
 		Aden=np.sum(SN**2.)
-		Afcnum=np.sum(powerMap*cosMap/fiducialMap*(SN**2.))
+		Afcnum=np.sum(powerMap*cosMap/fiducialMap*(SN**2.)) # biased hexadecapole power coeff
 		Afcden=np.sum((SN*cosMap)**2.)
-		Afsnum=np.sum(powerMap*sinMap/fiducialMap*(SN**2.))
+		Afsnum=np.sum(powerMap*sinMap/fiducialMap*(SN**2.)) # biased hexadecapole power coeff
 		Afsden=np.sum((SN*sinMap)**2.)
-		A=Anum/Aden
-		Afc=Afcnum/Afcden
+		A=Anum/Aden 
+		Afc=Afcnum/Afcden 
 		Afs=Afsnum/Afsden
-		fs=Afs/A
-		fc=Afc/A
+		fs=Afs/A # NB: no bias correction so don't use yet
+		fc=Afc/A 
 	
 	if False: # depracated method
 		# Initialise other variables
+		raise Exception('Depracated KKtest method')
 	    	A_num, A_den=0.,0.
 	    	Afs_num,Afs_den=0.,0.
 	    	Afc_num,Afc_den=0.,0.
@@ -313,7 +326,7 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
 	                		Afs_num+=map.powerMap[i,j]/fiducial*(np.sin(4.*ang)*SN**2.)
 	                		Afs_den+=(SN*np.sin(4.*ang))**2.
 	                
-	    	A=A_num/A_den
+	    	A=A_num/A_den-A_bias
 	    	Afs=Afs_num/Afs_den
 	    	Afc=Afc_num/Afc_den
 	    	fs=Afs/A
@@ -328,6 +341,58 @@ def zero_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.
     	
     	return A,fs_corr,fc_corr,Afs_corr,Afc_corr
     
+def A_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
+	slope=a.slope,factor=None,rot=0.,KKmethod=a.KKmethod,\
+	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors):
+	""" Use KK 14 estimators to find only monopole amplitude A. This is done for noise+lensing sims (i.e. NO FOREGROUNDS)
+	We use previous A_estimate for the SNR here for consistency
+    
+  	Inputs: map (in power-space)
+ 	map_size = width of map in degrees
+    	lMin,lMax= fitting range of l
+    	slope -> fiducial C_l map slope
+    	rot -> optional angle for pre-rotation of power-space map in degrees.
+    	KKmethod -> Boolean for which S/N ratio to apply (true is Kamionkowski/Kovetz version, false is Sherwin version)
+    	delensing_fraction -> efficiency of delensing (0.1-> 90% removed)
+    	factor -> expected amplitude factor (to speed convergence)
+    	useTensors -> whether to include r = 0.1 tensor modes
+    	
+    	Outputs:
+    	A from estimators.
+    	"""
+    	from hades.NoisePower import noise_model
+    	
+    	if KKmethod:
+    		# Compute sky fraction
+    		area = (a.map_size*np.pi/180.)**2. # map area in steradians
+    		f_sky = area/(4.*np.pi)
+    		return 'Depracated method'
+    	
+    	# Import lensing function (made from CAMB)
+    	from hades.NoisePower import lensed_Cl,r_Cl
+    	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
+    	Cl_r_func=r_Cl()
+    	
+    	# Compute KK estimated quantities
+    	goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax))
+	lMap=map.modLMap.ravel()[goodPix]
+	powerMap=map.powerMap.ravel()[goodPix]
+	
+	noiseClmap=noise_model(lMap,FWHM=FWHM,noise_power=noise_power)
+	lensClmap=Cl_lens_func(lMap)
+	if useTensors:
+		rClmap=Cl_r_func(lMap)
+	else:
+		rClmap=np.zeros_like(lensClmap)
+	fiducialMap=lMap**(-slope)
+	SN=(factor*fiducialMap)/(factor*fiducialMap+noiseClmap+lensClmap+rClmap)
+	
+	Anum=np.sum(powerMap/fiducialMap*(SN**2.))
+	Aden=np.sum(SN**2.)
+	Afactor=Anum/Aden
+	
+	return Afactor
+
 def noisy_estimator(map,map_size=a.map_size,lMin=a.lMin,lMax=a.lMax,\
 FWHM=a.FWHM,noise_power=a.noise_power,slope=a.slope,noNoise=False):
     """ Use Kamionkowski & Kovetz 2014 test to find polarisation strength and anisotropy angle via fs, fc parameters.

@@ -2,7 +2,7 @@ import numpy as np
 from hades.params import BICEP
 a=BICEP()
 
-def full_sky_reconstructor(sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
+def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
 	noise_power=a.noise_power,delensing_fraction=a.delensing_fraction,\
 	freq=a.freq,maxDec=85.):
 	"""This reconstructs the full data from the multiprocessed full sky runs. 
@@ -14,7 +14,7 @@ def full_sky_reconstructor(sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
 	
 	# First load in coordinates
 	import pickle
-	map_dir='/data/ohep2/FullSky/%sdeg%s/' %(map_size,sep)
+	map_dir=root_dir+'%sdeg%s/' %(map_size,sep)
 	full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
 	full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
 	goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))
@@ -30,7 +30,7 @@ def full_sky_reconstructor(sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
 	while True:
 		if index%1000==0:
 			print index
-		fileName='FullSky/BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
+		fileName=root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
     		if not os.path.exists(fileName):
         		print 'no more dat at %s' %index
         		break
@@ -62,7 +62,7 @@ def full_sky_reconstructor(sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
 		angle_err=np.array(angle_err)[ids]
 		
 	# Save output
-	np.savez('/data/ohep2/FullSky/all_dat%s_f%s_ms%s_s%s_fw%s_np%s_d%s.npz' %(maxDec,freq,map_size,sep,FWHM,noise_power,delensing_fraction),ras=ras,decs=decs,\
+	np.savez(root_dir+'all_dat%s_f%s_ms%s_s%s_fw%s_np%s_d%s.npz' %(maxDec,freq,map_size,sep,FWHM,noise_power,delensing_fraction),ras=ras,decs=decs,\
 		A=A,eps=eps,eps_mean=eps_mean,eps_err=eps_err,\
 		angle=angle,angle_err=angle_err)
 	

@@ -154,7 +154,7 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     from .PowerMap import dust_emission_ratio
     dust_intensity_ratio=dust_emission_ratio(freq)
     
-    BB.powerMap*=dust_intensity_ratio 
+    BB.powerMap*=dust_intensity_ratio**2. # square since applied to power-maps
     
     # Account for window factor
     BB.powerMap/=windowFactor

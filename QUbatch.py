@@ -51,10 +51,10 @@ if __name__=='__main__':
 	# Calculate power
 	comb_map=Qmap.copy()
 	ang_map=Qmap.copy()
-	windowFactor=np.mean(maskMap.data**2.)
-	Tmap/=windowFactor
-	Qmap/=windowFactor
-	Umap/=windowFactor
+	windowFactor=float(np.mean(maskMap.data**2.))
+	Tmap.data/=windowFactor
+	Qmap.data/=windowFactor
+	Umap.data/=windowFactor
 	
 	for i in range(len(comb_map.data)):
 		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)

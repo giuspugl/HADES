@@ -1,14 +1,14 @@
 # batch_maps.sub -- run map creation for each patch
 
 universe		= vanilla
-executable              = /data/ohep2/hades/batch_maps.sh
+executable              = /data/ohep2/hades/hex_params.sh
 getenv			= true
 arguments               = "$(Process)"
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
 request_memory		= 2500
 log                     = /dev/null
-output			= batch_maps.out
-error			= batch_maps.error
+output			= hex_params.out
+error			= hex_params.error
 notification		= never
-queue 100
+queue 1500

@@ -194,6 +194,9 @@ def dust_emission_ratio(nu1,nu2=a.reference_frequency,Tdust=a.dust_temperature,b
     nu2_Hz=nu2*1e9
     flux1=nu1_Hz**(3+beta)/(np.exp(h*nu1_Hz/(k*Tdust))-1)
     flux2=nu2_Hz**(3+beta)/(np.exp(h*nu2_Hz/(k*Tdust))-1)
+    
+    # Unit + Colour Factor:
+    
     return flux1/flux2
     
 def central_ell(input_func,l1,l2):

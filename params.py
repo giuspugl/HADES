@@ -6,22 +6,20 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/FullSky/'#'CleanWidePatch/' # '/data/ohep2/{sims/,BICEP2/,WidePatch/,FFP8/,FullSky/}'# root directory for simulations
+	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
 	sep = 3  # Separation of map centres
-	padding_ratio=1. # padded map width / original map width - no padding here
 	
-	N_sims = 200#0 # Number of MC sims
+	N_sims = 500#0 # Number of MC sims
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
 	
 	# Estimator parameters
-	l_step = 120.*3./map_size #120.# width of binning in l-space for power spectra
-	lMin = 70.*3./map_size #120.
+	l_step = 110.*3./map_size #120.# width of binning in l-space for power spectra
+	lMin = 60.*3./map_size #120.
 	lMax = 2000. # ranges to fit spectrum over 
 	rot=11.25 # pre rotation before applying estimators
-	repeat=1 # repeat application of noise + estimation to see errors
 	
 	# Planck XXII parameters for dust SED
 	dust_temperature = 19.6
@@ -33,11 +31,14 @@ class BICEP:
 	# BICEP: (30,5)
 	# S4: (1.5,1) or (30,1)
 	# No noise: (0,1e-30) (for stability)
-	FWHM = 1.5#1.5 # full width half maximum of beam in arcmin
-	noise_power = 1.#1. # noise power of BICEP -> in microK-arcmin
+	# liteBIRD: (30,3)
+	FWHM = 1.5#1.5#1.5 # full width half maximum of beam in arcmin
+	noise_power = 1.0# noise power of BICEP -> in microK-arcmin
 	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensing.npz'
+	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
+	useTensors=False #True # include r = 0.1 tensor modes
 	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
 	
 	# Fiducial C_l 
@@ -49,10 +50,15 @@ class BICEP:
 	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
 	
 	## OTHER TESTING PARAMETERS
+	hexTest = True # test methods using fake isotropic map
+	I2SNR = True # use <I^2> to estimate the SNR for patch anisotropy measurements
+	debiasA = True # for debiasing of monopole amplitude using noise only sims
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
-	send_email=False#True # send email on completion
+	send_email=True # send email on completion
+	padding_ratio=1. # padded map width / original map width - no padding here
+	repeat=200 # repeat application of noise + estimation to see errors # DEPRACATED
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)
 	rotation_angles=np.arange(0,22.5,0.9)

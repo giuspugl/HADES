@@ -51,10 +51,13 @@ if __name__=='__main__':
 	# Calculate power
 	comb_map=Qmap.copy()
 	ang_map=Qmap.copy()
-	windowFactor=np.mean(maskMap.data**2.)
+	windowFactor=float(np.mean(maskMap.data**2.))
+	Tmap.data/=windowFactor
+	Qmap.data/=windowFactor
+	Umap.data/=windowFactor
 	
 	for i in range(len(comb_map.data)):
-		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)/windowFactor
+		comb_map.data[i]=np.sqrt(Qmap.data[i]**2.+Umap.data[i]**2.)
 		ang_map.data[i]=0.5*np.arctan(Qmap.data[i]/Umap.data[i])*180./np.pi # angle in radians
 		
 	
