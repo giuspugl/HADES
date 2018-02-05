@@ -1,0 +1,61 @@
+from flipper import *
+import numpy as np
+from hades.params import BICEP
+a=BICEP()
+
+if __name__=='__main__':
+	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
+	import time
+	start_time=time.time()
+	import sys
+	import pickle
+	sys.path.append('/data/ohep2/')
+	sys.path.append('/home/ohep2/Masters/')
+	import os
+	
+	batch_id=int(sys.argv[1]) # batch_id number
+	
+	# First load good IDs:
+	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
+	
+	outDir=a.root_dir+'HexBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	
+	if a.remakeErrors:
+		if os.path.exists(outDir+'%s.npy' %batch_id):
+			print 'output exists; exiting'
+			sys.exit()
+	
+	if batch_id<110: # create first time
+		from hades.batch_maps import create_good_map_ids
+		create_good_map_ids()
+		print 'creating good IDs'
+		
+	goodIDs=np.load(goodFile)
+	
+	
+	if batch_id>len(goodIDs)-1:
+		print 'Process %s terminating' %batch_id
+		sys.exit() # stop here
+	
+	map_id=goodIDs[batch_id] # this defines the tile used here
+	
+	print '%s starting for map_id %s' %(batch_id,map_id)
+
+		
+	# Now run the estimation
+	from hades.hex_wrap import debiased_wrap#debiased_wrap # estimator_wrap
+	output=debiased_wrap(map_id) # debiased_wrap(map_id) estimator_wrap(map_id)
+	
+	# Save output to file
+	if not os.path.exists(outDir): # make directory
+		os.makedirs(outDir)
+		
+	np.save(outDir+'%s.npy' %batch_id, output) # save output
+	
+	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
+	
+	if batch_id==len(goodIDs)-2:
+		if a.send_email:
+			from hades.NoiseParams import sendMail
+			sendMail('Single Map')
+

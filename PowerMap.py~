@@ -185,19 +185,22 @@ def MakePower(map_id,map_size=a.map_size,map_type='B'):
 
 def dust_emission_ratio(nu1,nu2=a.reference_frequency,Tdust=a.dust_temperature,beta=a.dust_spectral_index):
     """ Ratio of dust spectral flux at two frequencies in GHz. 
-    This is a modified black-body spectrum.
+    This is uses a modified black-body spectrum, plus unit and color correction factors from Planck HFI XI (exact values from Rotti+Huffenberger16)).
     Default values (dust temperature Tdust in K and spectral index beta) are from Planck XXII.
     nu2 is a reference dust frequency"""
     h=6.6261e-34 # planck constant
     k=1.3806e-23 # boltzmann constant  
     nu1_Hz=nu1*1e9 # in Hz
     nu2_Hz=nu2*1e9
+    if nu2!=353. and nu1!=150.:
+    	raise Exception('Need to compute color + unit factors for this frequency.')
     flux1=nu1_Hz**(3+beta)/(np.exp(h*nu1_Hz/(k*Tdust))-1)
     flux2=nu2_Hz**(3+beta)/(np.exp(h*nu2_Hz/(k*Tdust))-1)
     
     # Unit + Colour Factor:
+    col_unit_factor=0.6486 # see Planck HFI XI paper sec. 3
     
-    return flux1/flux2
+    return flux1/flux2*col_unit_factor
     
 def central_ell(input_func,l1,l2):
     """ Semi-analytically compute the central-ell value of a bin using a given expected ell dependence.

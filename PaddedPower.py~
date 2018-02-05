@@ -163,7 +163,73 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     return BB
     
 	
+def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True):
+    """ Function to create 2D B-mode power map from real space map padded with zeros.
+    Input: map_id (tile number)
+    map_size (in degrees)
+    sep (separation of map centres)
+    padding_ratio (ratio of padded map width to original (real-space) map width)
+    freq (experiment frequency (calibrated for 100-353 GHz))
+    fourier (return fourier space map?)
+    power (return power map?)
+   
+    Output: B-mode map in power-space , B-mode map in Fourier-space  
+    """
+    import flipperPol as fp
+    
+    inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+    
+    # Read in original maps from file
+    Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+    Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
+    Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+    maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
+    
+    # Compute window factor <W^2> for UNPADDED window (since this is only region with data)
+    windowFactor=np.mean(maskMap.data**2.)
+    
+    # Compute zero-padded maps (including mask map)
+    from .PaddedPower import zero_padding
+    zTmap=zero_padding(Tmap,padding_ratio)
+    zQmap=zero_padding(Qmap,padding_ratio)
+    zUmap=zero_padding(Umap,padding_ratio)
+    zWindow=zero_padding(maskMap,padding_ratio)
 
+    # Define mod(l) and ang(l) maps needed for fourier transforms
+    modL,angL=fp.fftPol.makeEllandAngCoordinate(zTmap) # choice of map is arbitary
+
+    # Create pure T,E,B maps using 'hybrid' method to minimize E->B leakage
+    fT,fE,fB=fp.fftPol.TQUtoPureTEB(zTmap,zQmap,zUmap,zWindow,modL,angL,method='hybrid')
+    # Rescale to correct amplitude using dust SED
+    from .PowerMap import dust_emission_ratio
+    dust_intensity_ratio=dust_emission_ratio(freq)
+    
+    fB.kMap*=dust_intensity_ratio # apply dust-reduction factor 
+    fE.kMap*=dust_intensity_ratio
+    fT.kMap*=dust_intensity_ratio  
+
+    # Account for window factor
+    fB.kMap/=np.sqrt(windowFactor)
+    fE.kMap/=np.sqrt(windowFactor)
+    fT.kMap/=np.sqrt(windowFactor)
+    
+    if power:
+    	# Transform into power space
+    	_,_,_,_,_,_,_,_,BB=fp.fftPol.fourierTEBtoPowerTEB(fT,fE,fB,fT,fE,fB)
+    
+    	# Now account for power loss due to padding:
+    	BB.powerMap*=zTmap.powerFactor # no effect here
+	BB.powerMap*=dust_intensity_ratio**2. # square since applied to power-maps
+    
+    	BB.powerMap/=windowFactor
+    	BB.windowFactor=windowFactor # store window factor
+    if fourier and power:
+    	return fB,BB
+    elif fourier:
+    	return fB
+    elif power:
+    	return BB
+    
 def zero_padding(tempMap,padding_factor):
 	""" Pad the real-space map with zeros.
 	Padding_factor is ratio of padded map width to original map width.

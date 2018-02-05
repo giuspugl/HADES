@@ -444,7 +444,12 @@ def hexPow_stats(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_p
 	import os
 	
 	# Import good map IDs
-	goodMaps=np.load(a.root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep))
+	goodDir=a.root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep)
+	if not os.path.exists(goodDir):
+		from hades.batch_maps import create_good_map_ids
+		create_good_map_ids()
+		print 'creating good IDs'
+	goodMaps=np.load(goodDir)
 	
 	# Define arrays
 	A,Afs,Afc,fs,fc,ang,frac,probA,probP,logA,epsDeb,HPow,HPowDeb,HPowSig,HprobA,HprobP,logHPowMean=[np.zeros(len(goodMaps)) for _ in range(17)]
@@ -462,7 +467,7 @@ def hexPow_stats(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_p
 		if i%100==0:
 			print 'loading %s of %s' %(i+1,len(goodMaps))
 		# Load in data from tile
-		data=np.load(a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i))
+		data=np.load(a.root_dir+'HexBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i))
 		
 		# Load in data
 		A[i],fs[i],fc[i],Afs[i],Afc[i],frac[i],ang[i]=[d[0] for d in data[:7]] # NB: only A, Afs, Afc, ang are useful
@@ -589,17 +594,25 @@ def hexPow_stats(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_p
 	print 'Plotting complete'
 
 def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,
-	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims,suffix=''):
+	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims,suffix='',folder=None,root_dir=a.root_dir):
 	"""Compute the global hexadecapole anisotropy over the patch, summing the epsilon values weighted by the S/N.
 	The estimate is assumed Gaussian by Central Limit Theorem.
 	Errors are obtained by computing estimate for many MC sims
 	"""
+	raise Exception('Now depracated. Use patch_hexadecapole in hex_wrap.py')
 	# Load array of map ids
-	goodMaps=np.load(a.root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep))
+	import os
+	
+	goodDir=root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep)
+	if not os.path.exists(goodDir):
+		from hades.batch_maps import create_good_map_ids
+		create_good_map_ids(map_size=map_size,sep=sep,root_dir=root_dir)
+		print 'creating good IDs'
+	goodMaps=np.load(root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep))
 	
 	if a.I2SNR:
-		I2dir = a.root_dir+'%sdeg%s/meanI2.npy' %(map_size,sep)
-		QUdir = a.root_dir+'%sdeg%s/meanQU.npy' %(map_size,sep)
+		I2dir = root_dir+'%sdeg%s/meanI2.npy' %(map_size,sep)
+		QUdir = root_dir+'%sdeg%s/meanQU.npy' %(map_size,sep)
 		import os
 		if not os.path.exists(I2dir):
 			raise Exception('Must compute <I^2> data by running batchI2.py')
@@ -608,14 +621,25 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	
 	# Initialize variables
 	hex_patch_num=0.
+	A_patch_num=0. # for mean amplitude shift
 	norm=0. # normalisation
 	hex_patch_MC_num=np.zeros(N_sims)
+	A_patch_MC_num=np.zeros(N_sims)
 	
 	for i in range(len(goodMaps)):
 		# Load dataset
-		datPath=a.root_dir+'HexBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i,suffix)
+		if root_dir=='/data/ohep2/liteBIRD/':
+			ij=goodMaps[i]
+		else:
+			ij=i # for compatibility
+		if folder==None:
+			folder='HexBatchData'
+		datPath=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,ij,suffix)
 		data=np.load(datPath)
-		A=data[0][1]		
+		A=data[0][1]	
+		A_est=data[0][0]
+		A_MC=data[7][0]
+		A_eps=data[0][2]	
 		hex_est=data[9][0]
 		hex_MC=data[7][7]
 		hex_eps=data[9][2]
@@ -623,24 +647,31 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 		
 		# Compute contribution to mean epsilon
 		if a.I2SNR:
-			SNR=1.#(data[0][1]/data[0][2])**2.#/hex_eps**2.#I2data[i]**2./hex_eps**2.
+			SNR=(A/hex_eps)**2.#(data[0][1]/data[0][2])**2.#/hex_eps**2.#I2data[i]**2./hex_eps**2.
 		else:
-			SNR=1.
+			SNR=1.#(trueA/hex_eps)**2.
 		hex_patch_num+=SNR*hex_est
+		A_patch_num+=SNR*A_est
 		norm+=SNR
 		for j in range(N_sims):
 			hex_patch_MC_num[j]+=SNR*hex_MC[j]
+			A_patch_MC_num[j]+=SNR*A_MC[j]
 			
 	# Compute mean epsilon + MC values
 	hex_patch=hex_patch_num/norm
 	hex_patch_MC=hex_patch_MC_num/norm
+	A_patch=A_patch_num/norm
+	A_patch_MC=A_patch_MC_num/norm
 	
 	# Compute mean and standard deviation
 	MC_mean=np.mean(hex_patch_MC)
 	MC_std=np.std(hex_patch_MC)
+	A_MC_mean=np.mean(A_patch_MC)
+	A_MC_std=np.mean(A_patch_MC)
 	
 	# Compute significance of detection
 	sigmas=(hex_patch-MC_mean)/MC_std
+	sigmasA=(A_patch-A_MC_mean)/A_MC_std
 	
 	# Now plot
 	import matplotlib.pyplot as plt
@@ -652,7 +683,7 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	ypl=np.linspace(0,max(y),100)
 	plt.plot(xpl,ypl,ls='--',c='r')
 	plt.ylim(0,max(y))
-	outDir=a.root_dir+'PatchHexPowImproved/'
+	outDir=root_dir+'PatchHexPowImproved/'
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)
@@ -660,8 +691,9 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	plt.clf()
 	plt.close()
 	
-	return sigmas
-		
+	print sigmas,sigmasA
+	return sigmas,sigmasA
+	
 def epsilon_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,
 	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims):
 	"""Compute the global anisotropy over the patch, summing the epsilon values weighted by the S/N.

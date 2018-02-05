@@ -106,3 +106,69 @@ def skyMap(dat,ra,dec,cbar_label=None,cmap='jet',decLims=[-90,-40,5],raLims=[-18
         fig.clf()
 	fig.clear()
 
+
+def mollweide_map(dat,ra,dec,cbar_label=None,cmap='jet',decLims=[-90,-40,5],raLims=[-180,30,10],minMax=None,border=None,outFile=None,show=False):
+    """Plot in Mollweide Projection.
+    Inputs:
+    data -> values to plot
+    ra,dec -> coordinates
+    cbar_label -> label for colorbar
+    cmap -> colormap (e.g. 'jet)
+    minMax -> [min,max] for colorbar
+    decLims/raLims -> give min/max/step for RA and dec lines
+    border -> [ra,dec] of border of BICEP region
+    outFile -> location to save plot in
+    show -> boolean whether to show plot
+    
+    Output: image saved in outFile directory.
+    """
+    # load projection and helper functions
+    matplotlib.rcParams.update({'font.size': 22,'text.usetex': True,'font.family': 'serif'})
+
+    # setup figure
+    fig = pyl.figure(figsize=(25,15))
+    ax = fig.add_subplot(111, projection='mollweide')
+
+    # setup map: define AEA map optimal for given RA/Dec
+    #proj = skm.createConicMap(ax, ra.value, dec.value, proj_class=skm.AlbersEqualAreaProjection)
+    # add lines and labels for meridians/parallels (separation 5 deg)
+    #meridians = np.arange(decLims[0],decLims[1],decLims[2])
+    #parallels = np.arange(raLims[0],raLims[1],raLims[2])
+    #skm.setMeridianPatches(ax, proj, meridians, linestyle=':', lw=0.5, zorder=2)
+    #skm.setParallelPatches(ax, proj, parallels, linestyle=':', lw=0.5, zorder=2)
+    #skm.setMeridianLabels(ax, proj, meridians, loc="left", fmt=skm.pmDegFormatter)
+    #skm.setParallelLabels(ax, proj, parallels, loc="top", fmt=skm.degFormatter)
+
+    # convert to map coordinates and plot a marker for each point
+    x,y = ra.value*np.pi/180., dec.value*np.pi/180.
+    marker = 's'
+    markersize=50
+    #markersize = skm.getMarkerSizeToFill(fig, ax, x, y)
+    if minMax==None:
+    	vmin,vmax=np.percentile(dat,[0,100])
+    else:
+    	vmin,vmax=minMax
+    sc = ax.scatter(x,y, c=dat, edgecolors='None', marker=marker, s=markersize, cmap=cmap, vmin=vmin, vmax=vmax)#, rasterized=True, zorder=1)
+    
+    # add border of BICEP region
+    if border !=None:
+    	xB,yB=border[0],border[1] # read in border coordinates
+    	bor = ax.plot(xB,yB,c='k',lw=2,ls='--') # plot border
+    
+    # add colorbar
+    #from mpl_toolkits.axes_grid1 import make_axes_locatable
+    #divider = make_axes_locatable(ax)
+    #cax = divider.append_axes("right", size="3%", pad=0.0)
+    cb = fig.colorbar(sc)#, cax=cax)
+    cb.set_label(cbar_label,fontsize=20)
+ 
+    # show (and save) ...
+    fig.tight_layout()
+    if outFile!=None:
+        fig.savefig(outFile,bbox_inches='tight')
+    if show:
+        fig.show()
+    else:
+        fig.clf()
+	fig.clear()
+

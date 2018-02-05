@@ -11,4 +11,4 @@ log                     = /dev/null
 output			= hex_params.out
 error			= hex_params.error
 notification		= never
-queue 1300
+queue 1500

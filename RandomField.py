@@ -2,7 +2,7 @@ import numpy as np
 from .params import BICEP
 a=BICEP()
 
-def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,err=None):
+def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,fourier=False,power=True):
 	""" Function to fill a power map with a Gaussian random field implementation of an input Cell_BB spectrum.
 	
 	This is adapted from flipper.LiteMap.FillWithGaussianRandomField
@@ -11,7 +11,8 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,err=None):
 	ell - rnage of ell for Cell
 	Cell - spectrum (NB: not normalised to l(l+1)C_ell/2pi)
 	lMin - minimum ell pixel to fill
-	err - array with errors on Cell
+	fourier - whether to return Fourier space map
+	power - whether to return power-space map
 	
 	Output: PowerMap with GRF
 	"""
@@ -39,7 +40,7 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,err=None):
 	
 	# Fit input Cell to spline
 	from scipy.interpolate import UnivariateSpline
-	spl=UnivariateSpline(ell,np.log(Cell),k=5) # use a quintic spline here with inverse variance error
+	spl=UnivariateSpline(ell,np.log(Cell),k=5) # use a quintic spline here
 	ll=np.ravel(modLMap)
 	kk=np.ones_like(ll)*1e-20
 	
@@ -59,12 +60,21 @@ def fill_from_Cell(powerMap,ell,Cell,lMin=a.lMin,err=None):
 	imgPart = np.sqrt(p)*np.random.randn(Ny,Nx)*np.sqrt(0.5)
 	# NB: 0.5 factor needed to get correct output Cell
 	
-	# Compute power
-	pMap=(realPart**2.+imgPart**2.)*area/(Nx*Ny)**2.
+	if power:
+		# Compute power
+		pMap=(realPart**2.+imgPart**2.)*area/(Nx*Ny)**2.
 	
-	return pMap
-
-def fill_from_model(powerMap,model,lMin=a.lMin,lMax=a.lMax):
+		if fourier:
+			fMap=realPart+1.0j*imgPart
+			return pMap,fMap
+		else:
+			return pMap
+	else:
+		if fourier:
+			fMap=realPart+1.0j*imgPart
+			return fMap
+	
+def fill_from_model(powerMap,model,lMin=a.lMin,lMax=a.lMax,fourier=False,power=True):
 	""" Function to fill a power map with a Gaussian random field implementation of an input Cell_BB spectrum.
 	
 	This is adapted from flipper.LiteMap.FillWithGaussianRandomField
@@ -72,8 +82,10 @@ def fill_from_model(powerMap,model,lMin=a.lMin,lMax=a.lMax):
 	powerMap (for output)
 	model - C_l model function for input ell
 	lMin/lMax - Range of ell to fill pixels (must be inside Cell_lens limits)
+	fourier - Boolean, whether to return Fourier-space map
+	power - Boolean, whether to return power-space map
 	
-	Output: PowerMap with GRF from model
+	Output: [PowerMap/fourier map] with GRF from model
 	"""
 	from fftTools import fftFromLiteMap
 	
@@ -114,8 +126,17 @@ def fill_from_model(powerMap,model,lMin=a.lMin,lMax=a.lMax):
 	imgPart = np.sqrt(p)*np.random.randn(Ny,Nx)*np.sqrt(0.5)
 	# NB: 0.5 factor needed to get correct output Cell
 	
-	# Compute power
-	pMap=(realPart**2.+imgPart**2.)*area/(Nx*Ny)**2.
+	if power:
+		# Compute power
+		pMap=(realPart**2.+imgPart**2.)*area/(Nx*Ny)**2.
 	
-	return pMap
+		if fourier:
+			fMap=realPart+1.0j*imgPart
+			return pMap,fMap
+		else:
+			return pMap
+	else:
+		if fourier:
+			fMap=realPart+1.0j*imgPart
+			return fMap
 	

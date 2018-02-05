@@ -9,21 +9,31 @@ class BICEP:
 	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
-	map_size =  3 # Width of each map
-	sep = 3  # Separation of map centres
+	map_size =  3#3#2.5 # Width of each map
+	sep = 3#3#2.45  # Separation of map centres
 	
-	N_sims = 500#0 # Number of MC sims
+	N_sims = 1000#0 # Number of MC sims
+	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
 	
 	# Estimator parameters
-	l_step = 110.*3./map_size #120.# width of binning in l-space for power spectra
-	lMin = 60.*3./map_size #120.
+	if map_size==3:
+		l_step=120.
+	elif map_size==2:
+		l_step=120.
+	elif map_size==4:
+		l_step=95.
+	elif map_size==2.5:
+		l_step=95.
+	else:
+		l_step = 60.#5. #{Use 95 for 2.5 degree map, 90 for 3 degree map,120 for 2 degree map,80 for 4 degree} #width of binning in l-space for power spectra
+	lMin = 180.*3./map_size #120.
 	lMax = 2000. # ranges to fit spectrum over 
 	rot=11.25 # pre rotation before applying estimators
 	
-	# Planck XXII parameters for dust SED
+	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
-	dust_spectral_index = 1.59
+	dust_spectral_index = 1.53 # Planck Intermediate LIV
 	reference_frequency = 353 # in GHz for input sims
 	
 	# Noise model
@@ -32,14 +42,19 @@ class BICEP:
 	# S4: (1.5,1) or (30,1)
 	# No noise: (0,1e-30) (for stability)
 	# liteBIRD: (30,3)
-	FWHM = 1.5#1.5#1.5 # full width half maximum of beam in arcmin
-	noise_power = 1.0# noise power of BICEP -> in microK-arcmin
+	if root_dir=='/data/ohep2/liteBIRD/':
+		FWHM=30.
+		noise_power=3.
+	else:
+		FWHM = 1.5 # full width half maximum of beam in arcmin
+		noise_power = 1. # noise power of BICEP -> in microK-arcmin
 	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensing.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
 	useTensors=False #True # include r = 0.1 tensor modes
 	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
+	rot_average = True#True # pre-rotate to correct for pixellations
 	
 	# Fiducial C_l 
 	slope=2.42 # C_l^f power law slope (from Planck X.X.X. paper)
@@ -49,16 +64,22 @@ class BICEP:
 	noi_par_NoisePower=np.arange(1e-60,5.1,0.1)#'0.2) #)np.arange(1e-30,2.1,0.16)#np.arange(1e-30,5.1,0.4)
 	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
 	
+	# Null testing parameters
+	f_dust_all = np.arange(1.,0.,-0.05)
+	err_repeats = 10 # repeat for uncertainties
+	
 	## OTHER TESTING PARAMETERS
-	hexTest = True # test methods using fake isotropic map
-	I2SNR = True # use <I^2> to estimate the SNR for patch anisotropy measurements
+	hexTest = False#True # test methods using fake isotropic map
+	useBias=True#True # correct for SIM-SIM - DATA-SIM bias
+	f_dust=1.0
+	I2SNR = False # use <I^2> to estimate the SNR for patch anisotropy measurements
 	debiasA = True # for debiasing of monopole amplitude using noise only sims
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
-	send_email=True # send email on completion
+	send_email=False # send email on completion
 	padding_ratio=1. # padded map width / original map width - no padding here
-	repeat=200 # repeat application of noise + estimation to see errors # DEPRACATED
+	repeat=1#50#200 # repeat application of noise + estimation to see errors
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)
 	rotation_angles=np.arange(0,22.5,0.9)

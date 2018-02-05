@@ -27,7 +27,7 @@ if __name__=='__main__':
 	sys.path.append('/home/ohep2/Masters/')
 	import os
 	
-	return Exception('UsingDepracatedVersion. Use wrapper.py')
+	raise Exception('UsingDepracatedVersion. Use wrapper.py')
 	
 	# First load good IDs:
 	goodIDs=np.load(a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep))

@@ -1,4 +1,4 @@
-l_step_dat=[75.,80.,85.,90.,95.,100.]
+l_step_dat=[130.,140.,150.,135.,155.,160.]#,130.,140.,150.]
 
 if __name__=='__main__':
 	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
@@ -36,7 +36,7 @@ if __name__=='__main__':
 		if os.path.exists(outDir+'%s_%s.npy' %(batch_id,param_id)):
 			sys.exit()
 	
-	if batch_id>len(l_step_dat)*len(goodIDs)-1:
+	if param_id>len(l_step_dat)-1:
 		print 'Process %s terminating' %batch_id
 		sys.exit() # stop here
 	
@@ -67,9 +67,14 @@ if __name__=='__main__':
 			
 def create_significances():
 	""" Recreate significances from parameters."""
+	import warnings
 	for i in range(len(l_step_dat)):
 		from hades.wrapper import hex_patch_anisotropy
 		suffix='_'+str(i)
-		sigs=hex_patch_anisotropy(suffix=suffix)
-		print l_step_dat[i],suffix
+		try:
+			sigs,sigsA=hex_patch_anisotropy(suffix=suffix)
+		except ValueError:
+			print 'err'
+			continue
+		print 'l_step %s, Hex sig: %s, A sig: %s' %(l_step_dat[i],sigs,sigsA)
 		

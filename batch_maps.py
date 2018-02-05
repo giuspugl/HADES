@@ -2,17 +2,17 @@ import numpy as np
 from hades.params import BICEP
 a=BICEP()
 
-def create_good_map_ids():
+def create_good_map_ids(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size):
 	""" Create a file with the list of only good map ids in"""
 	import pickle
 	
 	# Load in good maps
-	goodMaps=pickle.load(open(a.root_dir+str(a.map_size)+'deg'+str(a.sep)+'/fvsgoodMap.pkl','rb'))
+	goodMaps=pickle.load(open(root_dir+str(map_size)+'deg'+str(sep)+'/fvsgoodMap.pkl','rb'))
 	all_file_ids=np.arange(0,len(goodMaps))
 	
 	goodIds=[int(file_id) for file_id in all_file_ids if goodMaps[file_id]!=False] # just for correct maps
 	
-	np.save(a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep),goodIds)
+	np.save(root_dir+'%sdeg%sGoodIDs.npy' %(map_size,sep),goodIds)
 
 
 if __name__=='__main__':

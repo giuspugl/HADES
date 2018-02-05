@@ -442,3 +442,4 @@ def AnisotropyPower(map_id,show=True,save=False,fitPlot=False):
     BBpower.plot(show=show,log=True,powerOfL=-slope,zoomUptoL=2000,title='Power spectrum * l^-'+str(slope),pngFile=pngFile)
 
     return None
+   

@@ -1,0 +1,121 @@
+from flipper import *
+import numpy as np
+from hades.params import BICEP
+a=BICEP()
+
+def low_dust_estimator2(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
+    slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,debiasAmplitude=True):
+    """Use modified KK14 estimators to compute polarisation hexadecapole amplitude and angle via Afs,Afc parameters.
+    This uses the noise model in hades.NoisePower.noise_model.
+    A is computed recursively, since the S/N ratio depends on it (weakly)
+    
+    Inputs: map (in power-space)
+    map_size = width of map in degrees
+    lMin,lMax= fitting range of l
+    slope -> fiducial C_l map slope
+    rot -> optional angle for pre-rotation of power-space map in degrees.
+    delensing_fraction -> efficiency of delensing (0.1-> 90% removed)
+    factor -> expected amplitude factor (to speed convergence)
+    useTensors -> Boolean whether to include r = 0.1 tensor modes from IGWs
+    debiasAmplitude -> Boolean whether to subtract noise+lensing C_l for estimation of A
+    
+    Outputs:
+    A,fs,fc, Afs, Afc from estimators. NB these are corrected for any map pre-rotation.
+    """
+    from hades.NoisePower import lensed_Cl,r_Cl,noise_model
+    
+    def Cl_total_noise_func(l):
+        """This is total C_l noise from lensing, B-modes and experimental noise"""
+        Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
+        if useTensors:
+            Cl_r_func=r_Cl()
+            return Cl_lens_func(l)+Cl_r_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
+        else:
+            return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
+    
+    if factor==None:
+        # If no estimate for monopole amplitude, compute this recursively (needed in SNR)
+        # A only weakly depends on the SNR so convergence is usually quick
+        N=0
+        if a.f_dust>0.:
+        	Afactor=1e-12*a.f_dust**2. # initial estimate
+        else:
+        	Afactor=1e-16 # some arbitrary small value
+
+        while N<20: # max no. iterations
+            goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax)) # correct pixels
+            lMap=map.modLMap.ravel()[goodPix] # mod(l)
+            PowerMap=map.powerMap.ravel()[goodPix] # B-mode (biased) power
+            OtherClMap=Cl_total_noise_func(lMap) # extra C_l power
+            if debiasAmplitude:
+            	debiasedPowerMap=PowerMap-OtherClMap # power estimate only due to dust
+            else:
+            	debiasedPowerMap=PowerMap
+            fiducialClMap=lMap**(-slope) # fiducial Cl
+
+            SNMap = (Afactor*fiducialClMap)/(Afactor*fiducialClMap+OtherClMap) # SN ratio
+
+            # Compute estimate for A
+            Anum=np.sum(debiasedPowerMap*(SNMap**2.)/fiducialClMap)
+            Aden=np.sum(SNMap**2.)
+
+            # Now record output
+            lastFactor=Afactor
+            Afactor=Anum/Aden
+            
+            # Stop if approximate convergence reached
+            if np.abs((Afactor-lastFactor)/Afactor)<0.01:
+                break
+            N+=1
+
+        if N==20:
+            print 'Map %s did not converge with slope: %.3f, Afactor %.3e, last factor: %.3e' %(map_id,slope,Afactor,lastFactor)
+        finalFactor=Afactor
+        
+    else:
+        finalFactor=factor # just use the A estimate from input      
+
+        # Now compute A,Afs,Afc (recompute A s.t. all best estimators use same SNR)
+    
+    goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax)) # pixels in correct range
+    angMap=(map.thetaMap.ravel()[goodPix]+rot*np.ones_like(map.thetaMap.ravel()[goodPix]))*np.pi/180. # angle in radians
+    cosMap=np.cos(4.*angMap) # map of cos(4theta)
+    sinMap=np.sin(4.*angMap)
+    lMap=map.modLMap.ravel()[goodPix] # |ell|
+    PowerMap=map.powerMap.ravel()[goodPix] # B-mode biased power
+    OtherClMap=Cl_total_noise_func(lMap) # extra C_l power from lensing + noise (+ tensor modes)
+    if debiasAmplitude:
+    	debiasedPowerMap=PowerMap-OtherClMap # power estimate only due to dust
+    else:
+    	debiasedPowerMap=PowerMap
+    fiducialClMap=lMap**(-slope) # fiducial Cl
+    
+    SNmap=(finalFactor*fiducialClMap)/(finalFactor*fiducialClMap+OtherClMap) # signal-to-noise ratio
+    
+    # Now compute estimates for A, Afs, Afc
+    Anum=np.sum(debiasedPowerMap*(SNmap**2.)/fiducialClMap) # noise-debiased
+    Aden=np.sum(SNmap**2.)
+    Afcnum=np.sum(debiasedPowerMap*cosMap*(SNmap**2.)/fiducialClMap) # cosine coeff - these are not debiased (else messes up corrections)
+    Afcden=np.sum((SNmap*cosMap)**2.)
+    Afsnum=np.sum(debiasedPowerMap*sinMap*(SNmap**2.)/fiducialClMap) # sine coeff - these are not debiased (else messes up corrections)
+    Afsden=np.sum((SNmap*sinMap)**2.)
+    A=Anum/Aden
+    Afc=Afcnum/Afcden
+    Afs=Afsnum/Afsden
+    fs=Afs/A # fs,fc are less reliable since have error from both A and Afs
+    fc=Afc/A
+
+    # Now correct for the map rotation
+    rot_rad=rot*np.pi/180. # angle of rotation in radians
+    fs_corr=fs*np.cos(rot_rad*4.)-fc*np.sin(rot_rad*4.)
+    fc_corr=fs*np.sin(rot_rad*4.)+fc*np.cos(rot_rad*4.)
+    Afs_corr=Afs*np.cos(rot_rad*4.)-Afc*np.sin(rot_rad*4.)
+    Afc_corr=Afs*np.sin(rot_rad*4.)+Afc*np.cos(rot_rad*4.)
+    
+    if factor==None:
+    	return A,fs_corr,fc_corr,Afs_corr,Afc_corr,finalFactor # to save finalFactor if different to A
+    else:
+        return A,fs_corr,fc_corr,Afs_corr,Afc_corr
+
+
+
