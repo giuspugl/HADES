@@ -88,9 +88,11 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	import matplotlib.pyplot as plt
 	plt.figure()
 	plt.errorbar(a.f_dust_all,mean,yerr=err,fmt='x')
+	plt.rc('text', usetex=True)
+	plt.rc('font', family='serif')
 	plt.xlabel(r'$f_\mathrm{dust}$')
-	plt.ylabel(r'Significance')
-	plt.title('Null Test Significances')
+	plt.ylabel(r'Detection Significance')
+	plt.title(r'Null Test Significances')
 	plt.savefig(root_dir+'NullTestPlotCorrected_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
 	plt.close()
 	
@@ -115,6 +117,8 @@ def plot_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.no
 	plt.figure()
 	#np.savez('/data/ohep2/testDat.npz',f_dust=a.f_dust_all,h2mean=h2_mean,h2eps=h2_eps,h2est=h2_est)
 	yerr=(np.array(h2_eps))/(np.log(10)*(np.array(h2_mean)+np.array(bias)))
+	plt.rc('text', usetex=True)
+	plt.rc('font', family='serif')
 	plt.errorbar(np.array(a.f_dust_all),np.log10(np.array(bias)+np.array(h2_mean)),yerr=yerr,fmt='x',label='Biased MC prediction')
 	plt.scatter(a.f_dust_all,np.log10(np.array(bias)),marker='x',c='g',label='Bias')
 	plt.scatter(a.f_dust_all,np.log10(np.array(bias)+np.array(h2_est)),marker='x',c='r',label='Biased Estimate')
@@ -122,7 +126,7 @@ def plot_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.no
 	plt.ylabel(r'$\log_{10}{H^2}$')
 	#plt.yscale('log')
 	plt.legend()
-	plt.title('Null Test Significances')
+	plt.title(r'Null Test Hexadecapole Strength')
 	plt.savefig(root_dir+'NullTestH2Plot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
 	plt.close()
 	

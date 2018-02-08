@@ -99,6 +99,15 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	from .PaddedPower import MakePowerAndFourierMaps
 	fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False)
 	
+	if True:
+		# Binning of 1D dust-only spectrum
+		# TESTING - replace fourier B-mode from dust with isotropic spectrum
+		powDust=fftTools.powerFromFFT(fBdust)
+		from .PowerMap import oneD_binning
+		ll,pp=oneD_binning(powDust.copy(),lMin,lMax,l_step,binErr=False,exactCen=False)
+		from .RandomField import fill_from_Cell
+		fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False)
+	
 	# Reduce dust amplitude by 'dedusting fraction'
 	fBdust.kMap*=f_dust
 	
@@ -144,17 +153,24 @@ def tile_wrap(map_id,map_size=a.map_size,\
 		return total_Cl_noise(ell)+A_est*ell**(-slope)
 	
 	## Testing
-	if a.hexTest:
-		print 'testing'
+	if False:#a.hexTest:
+		#print 'testing'
 		# test using a known power spectrum which replaces the data
 		testmap=totPow.copy()
 		testF=totFmap.copy()
 		from .RandomField import fill_from_model
 		def trial_mod(ell):
 			return analytic_model(ell,1.0e-13,2.42)
-		testmap.powerMap,testF.kMap=fill_from_model(Bpow.copy(),trial_mod,fourier=True)
+		testmap.powerMap,testF.kMap=fill_from_model(Bpow.copy(),trial_mod,fourier=True,power=True)
 		totPow=testmap # replace data by MC map for testing
 		totFmap=testF
+
+	# TESTING with an isotropic sim map
+	if False:
+		from .PowerMap import oneD_binning
+		l_cen,mean_pow = oneD_binning(totPow.copy(),lMin,lMax,l_step,binErr=False,exactCen=False)#a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+		totPow.powerMap,totFmap.kMap=fill_from_Cell(totPow.copy(),l_cen,mean_pow,fourier=True,power=True)
+		# Replace data with a single MC sim
 
 	# Compute anisotropy parameters
 	A_est,fs_est,fc_est,Afs_est,Afc_est,finalFactor=derotated_estimator(totPow.copy(),map_id,lMin=lMin,\
@@ -188,7 +204,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
 							debiasAmplitude=True,rot_average=rot_average)
 			bias_data[n]=-1.*(self_ests[3]**4.+self_ests[4]**2.)+4.*(cross_ests[3]**2.+cross_ests[4]**2.)
-		# Now compute the mean bias
+		# Now compute the mean bias - this debiases the DATA only
 		bias=np.mean(bias_data)
 	else:
 		print 'No bias subtraction'
@@ -218,8 +234,10 @@ def tile_wrap(map_id,map_size=a.map_size,\
 		Afc_MC[n]=output[4]
 		epsilon_MC[n]=np.sqrt((output[3]**2.+output[4]**2.))/output[0] # NOT corrected for bias in <H^2>
 		ang_MC[n]=0.25*180./np.pi*np.arctan(output[3]/output[4]) # NB: this is not corrected for bias
-		HexPow2_MC[n]=output[3]**2.+output[4]**2.-bias#-bias # correct for bias factor
-
+		HexPow2_MC[n]=output[3]**2.+output[4]**2. 
+		
+	HexPow2_MC-=np.mean(HexPow2_MC)*np.ones_like(HexPow2_MC) # remove the bias
+	
 	print 'MC sims complete'	
 	# Regroup data
 	allMC=[A_MC,fs_MC,fc_MC,Afs_MC,Afc_MC,epsilon_MC,ang_MC,HexPow2_MC]
@@ -259,4 +277,5 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	
 	# Return all output
 	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC,[],HexPow2dat,trueA,bias # (empty set to avoid reordering later code)
+
 

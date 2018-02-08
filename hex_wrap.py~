@@ -828,14 +828,14 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 		
 		# Compute contribution to mean epsilon
 		if I2SNR:
-			SNR=1.#A/A_est#(hex2_mean/hex2_eps)**2.#(data[0][1]/data[0][2])**2.#/hex_eps**2.#I2data[i]**2./hex_eps**2.
+			SNR=1.#(trueA**2./hex2_eps)**2.#/A_est#(hex2_mean/hex2_eps)**2.#(data[0][1]/data[0][2])**2.#/hex_eps**2.#I2data[i]**2./hex_eps**2.
 		else:
 			SNR=1.#(trueA/hex_eps)**2.
 		hex2_patch_num+=SNR*(hex2_est)#-hex2_mean)
 		A_patch_num+=SNR*A_est
 		norm+=SNR
 		for j in range(N_sims):
-			hex2_patch_MC_num[j]+=SNR*(hex2_MC[j]-hex2_mean)
+			hex2_patch_MC_num[j]+=SNR*(hex2_MC[j])#-hex2_mean)
 			A_patch_MC_num[j]+=SNR*A_MC[j]
 			
 	# Compute mean epsilon + MC values

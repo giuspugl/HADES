@@ -12,8 +12,8 @@ class BICEP:
 	map_size =  3#3#2.5 # Width of each map
 	sep = 3#3#2.45  # Separation of map centres
 	
-	N_sims = 1000#0 # Number of MC sims
-	N_bias = 1000 # no. sims used for bias computation
+	N_sims = 500#0 # Number of MC sims
+	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
 	
 	# Estimator parameters
@@ -29,7 +29,9 @@ class BICEP:
 		l_step = 60.#5. #{Use 95 for 2.5 degree map, 90 for 3 degree map,120 for 2 degree map,80 for 4 degree} #width of binning in l-space for power spectra
 	lMin = 180.*3./map_size #120.
 	lMax = 2000. # ranges to fit spectrum over 
-	rot=11.25 # pre rotation before applying estimators
+	padding_ratio=1. # padded map width / original map width - no padding here
+	f_dust=1.0
+
 	
 	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
@@ -52,9 +54,8 @@ class BICEP:
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensing.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
-	useTensors=False #True # include r = 0.1 tensor modes
 	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
-	rot_average = True#True # pre-rotate to correct for pixellations
+	rot_average = True # pre-rotate to correct for pixellations
 	
 	# Fiducial C_l 
 	slope=2.42 # C_l^f power law slope (from Planck X.X.X. paper)
@@ -65,14 +66,15 @@ class BICEP:
 	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
 	
 	# Null testing parameters
-	f_dust_all = np.arange(1.,0.,-0.05)
-	err_repeats = 10 # repeat for uncertainties
+	f_dust_all = np.array([1.0,0.50,0.25,0.001])#np.arange(1.,0.,-0.05)
+	err_repeats = 25 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
 	hexTest = False#True # test methods using fake isotropic map
+	rot=11.25 # pre rotation before applying estimators
 	useBias=True#True # correct for SIM-SIM - DATA-SIM bias
-	f_dust=.01
-	I2SNR = False # use <I^2> to estimate the SNR for patch anisotropy measurements
+	useTensors=False #True # include r = 0.1 tensor modes
+	I2SNR = True # use <I^2> to estimate the SNR for patch anisotropy measurements
 	debiasA = True # for debiasing of monopole amplitude using noise only sims
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
