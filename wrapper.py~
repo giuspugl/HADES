@@ -599,6 +599,7 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	The estimate is assumed Gaussian by Central Limit Theorem.
 	Errors are obtained by computing estimate for many MC sims
 	"""
+	raise Exception('Now depracated. Use patch_hexadecapole in hex_wrap.py')
 	# Load array of map ids
 	import os
 	

@@ -13,26 +13,20 @@ class BICEP:
 	sep = 3 # Separation of map centres
 	
 	N_sims = 500#0 # Number of MC sims
-	N_bias = 500 # no. sims used for bias computation
+	N_bias = 500# no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
+	padding_ratio=1 # padded map width / original map width 
 	
 	# Estimator parameters
-	if map_size==3:
-		l_step=120.
-	elif map_size==2:
-		l_step=120.
-	elif map_size==4:
-		l_step=95.
-	elif map_size==2.5:
-		l_step=95.
+	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
+	lMin = 120.#180.*3./map_size*1./padding_ratio
+	if padding_ratio==1:
+		lMin=180.*3./map_size
 	else:
-		l_step = 60.#5. #{Use 95 for 2.5 degree map, 90 for 3 degree map,120 for 2 degree map,80 for 4 degree} #width of binning in l-space for power spectra
-	lMin = 180.*3./map_size #120.
+		lMin=240.*3./map_size*1./padding_ratio
 	lMax = 2000. # ranges to fit spectrum over 
-	padding_ratio=1. # padded map width / original map width 
-	f_dust=1.0
+	f_dust=0.1
 
-	
 	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
 	dust_spectral_index = 1.53 # Planck Intermediate LIV
@@ -52,7 +46,7 @@ class BICEP:
 		noise_power = 1. # noise power of BICEP -> in microK-arcmin
 	
 	# Lensing
-	lensedDir='/data/ohep2/CAMB_lensing.npz'
+	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
 	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
 	rot_average = True # pre-rotate to correct for pixellations
@@ -61,26 +55,25 @@ class BICEP:
 	slope=2.42 # C_l^f power law slope (from Planck X.X.X. paper)
 	
 	# NoiseParamsSpace parameters
-	remakeErrors=False
+	remakeErrors=True
 	noi_par_NoisePower=np.arange(1e-60,5.1,0.1)#'0.2) #)np.arange(1e-30,2.1,0.16)#np.arange(1e-30,5.1,0.4)
 	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
 	
 	# Null testing parameters
-	f_dust_all = np.array([1.0,0.50,0.25,0.001])#np.arange(1.,0.,-0.05)
-	err_repeats = 25 # repeat for uncertainties
+	f_dust_all = np.logspace(-3,0,30)#np.arange(1.,-0.05,-0.05)
+	err_repeats = 10 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
 	hexTest = False#True # test methods using fake isotropic map
 	rot=11.25 # pre rotation before applying estimators
-	useBias=True#True # correct for SIM-SIM - DATA-SIM bias
+	useBias=True # correct for SIM-SIM - DATA-SIM bias
 	useTensors=False #True # include r = 0.1 tensor modes
 	I2SNR = True # use <I^2> to estimate the SNR for patch anisotropy measurements
 	debiasA = True # for debiasing of monopole amplitude using noise only sims
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
-	send_email=False # send email on completion
-	padding_ratio=1. # padded map width / original map width - no padding here
+	send_email=True # send email on completion
 	repeat=1#50#200 # repeat application of noise + estimation to see errors
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)

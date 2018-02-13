@@ -164,9 +164,75 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     BB.windowFactor=windowFactor # store window factor
     
     return BB
-    
+
+def DegradeMap(liteMap,lCut):
+	"""Remove unnecessary high-ell data from litemap by Fourier transforming. This returns a real space map."""
+	fPad=fftTools.fftFromLiteMap(liteMap)
+	fPad=fPad.trimAtL(lCut)
+	pad_new=liteMap.copy()
+	pad_new.Nx=fPad.Nx
+	pad_new.Ny=fPad.Ny
+	pad_new.pixScaleX=fPad.pixScaleX
+	pad_new.pixScaleY=fPad.pixScaleY
+	pad_new.data=np.real(np.fft.ifft2(fPad.kMap))
+	return pad_new
 	
-def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMask=False):
+def fourier_noise_test(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False):
+	from .RandomField import real_fill_from_Cell
+	initial_map,kMap=real_fill_from_Cell(unpadded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False,fourier=True)
+	from .PaddedPower import zero_padding
+	padded_map=zero_padding(initial_map,padding_ratio)
+	padded_map.data*=padded_mask.data
+	#initial_map.data*=unpadded_mask.data
+	fPadded=fftTools.fftFromLiteMap(padded_map)
+	fPadded.kMap/=np.sqrt(np.mean(padded_mask.data**2.))
+	fUnpadded=fftTools.fftFromLiteMap(unpadded_mask) # template
+	fUnpadded.kMap=kMap
+	#fUnpadded.kMap/=np.sqrt(np.mean(unpadded_mask.data**2.))
+	return fPadded,fUnpadded
+    
+def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False):
+	""" Create a fourier space map of dust with given noise parameters. This is padded to the desired padding ratio.
+	
+	Inputs: padded_mask -> mask file, with appropriate padding - used as a real-space template here
+	unpadded_mask -> original mask with no padding applied
+	ell,CellNoise -> C_l for noise spectrum
+	padding_ratio -> ratio of padded map width to unpadded map width
+	unpadded -> whether to also return unpadded noise map
+	"""	
+	# First compute a large real space map based on the power spectrum
+	if unpadded:
+		from .RandomField import real_fill_from_Cell
+		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False)
+		unpadded_noise=unpadded_mask.copy()
+		Xstart=int((noise_map.Nx-unpadded_noise.Nx)/2.)
+		Ystart=int((noise_map.Ny-unpadded_noise.Ny)/2.)
+		cut_data=noise_map.data[Ystart:Ystart+unpadded_noise.Ny,Xstart:Xstart+unpadded_noise.Nx]
+		unpadded_noise.data=cut_data
+		#unpadded_noise.data*=unpadded_mask.data
+		unpadded_noise_fourier=fftTools.fftFromLiteMap(unpadded_noise)
+	else:
+		from .RandomField import real_fill_from_Cell
+		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False) # compute in linear space
+	
+   	# Now zero pad this to desired ratio
+   	#from .PaddedPower import zero_padding
+   	#pad_noise=zero_padding(noise_map,padding_ratio)
+   	#pad_noise.data*=padded_mask.data # multiply by mask
+   	noise_map.data*=padded_mask.data # multiply by mask - only central region is non-zero
+   	windowFactor=np.mean(padded_mask.data**2.) # <W^2> factor 
+   	
+   	# Now compute fourier spectrum
+   	fourier_noise=fftTools.fftFromLiteMap(noise_map)
+   	fourier_noise.kMap/=np.sqrt(windowFactor) # account for window factor
+   	
+   	if unpadded:
+   		return fourier_noise,unpadded_noise_fourier
+   	else:
+   		return fourier_noise
+   	
+	
+def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMasks=False):
     """ Function to create 2D B-mode power map from real space map padded with zeros.
     Input: map_id (tile number)
     map_size (in degrees)
@@ -175,7 +241,7 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     freq (experiment frequency (calibrated for 100-353 GHz))
     fourier (return fourier space map?)
     power (return power map?)
-    returnMask (return real-space mask window?)
+    returnMasks (return real-space mask windows?)
    
     Output: B-mode map in power-space , B-mode map in Fourier-space  
     """
@@ -218,6 +284,12 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     #fE.kMap/=np.sqrt(windowFactor)
     #fT.kMap/=np.sqrt(windowFactor)
     
+    # Mask central pixel
+    index=np.where(fB.modLMap==min(fB.modLMap.ravel())) # central pixel
+    rest_index=np.where(fB.modLMap!=min(fB.modLMap.ravel())) 
+    index2=np.where(fB.modLMap==min(fB.modLMap[rest_index].ravel())) # next to centre
+    fB.kMap[index]=np.mean(fB.kMap[index2]) # replace pixel
+    
     if power:
     	# Transform into power space
     	BB=fftTools.powerFromFFT(fB)
@@ -228,13 +300,13 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     
     	#BB.powerMap/=windowFactor
     	#BB.windowFactor=windowFactor # store window factor
-    if returnMask:
+    if returnMasks:
         if fourier and power:
-    		return fB,BB,zWindow
+    		return fB,BB,zWindow,maskMap
     	elif fourier:
-    		return fB,zWindow
+    		return fB,zWindow,maskMap
     	elif power:
-    		return BB,zWindow
+    		return BB,zWindow,maskMap
     else:
     	if fourier and power:
 		return fB,BB

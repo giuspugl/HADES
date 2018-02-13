@@ -633,7 +633,7 @@ def hex_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 		else:
 			ij=i # for compatibility
 		if folder==None:
-			folder='HexBatchData'
+			folder='PaddedBatchData'
 		datPath=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,ij,suffix)
 		data=np.load(datPath)
 		A=data[0][1]	
@@ -710,7 +710,7 @@ def epsilon_patch_anisotropy(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_pow
 	
 	for i in range(len(goodMaps)):
 		# Load dataset
-		datPath=a.root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i)
+		datPath=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,i)
 		data=np.load(datPath)		
 		eps_est=data[5][0]
 		eps_MC=data[7][5]

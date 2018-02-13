@@ -639,7 +639,7 @@ def hex_fullsky_stats(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.no
 		if i%100==0:
 			print 'loading %s of %s' %(i+1,len(goodMaps))
 		# Load in data from tile
-		data=np.load(a.root_dir+'HexBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,map_id))
+		data=np.load(a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,map_id))
 		
 		# Load in data
 		A[i],fs[i],fc[i],Afs[i],Afc[i],frac[i],ang[i]=[d[0] for d in data[:7]] # NB: only A, Afs, Afc, ang are useful
@@ -808,7 +808,7 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 		else:
 			ij=i # for compatibility
 		if folder==None:
-			folder='DebiasedBatchData'
+			folder='PaddedBatchData'
 		datPath=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,ij,suffix)
 		data=np.load(datPath)
 		A=data[0][1]	

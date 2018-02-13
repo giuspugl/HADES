@@ -99,7 +99,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	from .PaddedPower import MakePowerAndFourierMaps
 	fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False)
 	
-	if True:
+	if False:
 		# Binning of 1D dust-only spectrum
 		# TESTING - replace fourier B-mode from dust with isotropic spectrum
 		powDust=fftTools.powerFromFFT(fBdust)
@@ -129,6 +129,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	from .RandomField import fill_from_model,fill_from_Cell
 	fourierNoise=fBdust.copy() # template
 	fourierNoise.kMap=fill_from_model(fourierNoise.copy(),total_Cl_noise,fourier=True,power=False)
+	return fftTools.powerFromFFT(fourierNoise)
 		
 	# Compute total map
 	totFmap=fBdust.copy()
@@ -137,6 +138,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	# Now convert to power-space
 	totPow=fftTools.powerFromFFT(totFmap) # total power map
 	Bpow=fftTools.powerFromFFT(fBdust) # dust only map
+			
 				
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
@@ -153,7 +155,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 		return total_Cl_noise(ell)+A_est*ell**(-slope)
 	
 	## Testing
-	if True:#a.hexTest:
+	if False:#a.hexTest:
 		#print 'testing'
 		# test using a known power spectrum which replaces the data
 		testmap=totPow.copy()
@@ -184,6 +186,12 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	from .PowerMap import oneD_binning
 	l_cen,mean_pow = oneD_binning(totPow.copy(),lMin,lMax,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
 	# gives central binning l and mean power in annulus using window function corrections 
+		
+	# TESTING
+	#fBias=totFmap.copy()
+	#fBias.kMap=fill_from_Cell(totPow.copy(),l_cen,mean_pow,fourier=True,power=False)
+	#powMC=fftTools.powerFromFFT(fBias.copy())
+	#return l_cen,mean_pow,powMC		
 		
 	# First compute the bias factor
 	if useBias:

@@ -90,7 +90,7 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     A=Anum/Aden
     
     if rot_average:
-    	all_rot = np.linspace(0.,45.,50)
+    	all_rot = np.linspace(0.,45.,25)
     else:
     	all_rot=[rot] # just a single value
     Afs,Afc,fs,fc=[np.zeros_like(all_rot) for _ in range(4)]
