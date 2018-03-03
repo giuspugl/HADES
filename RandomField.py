@@ -1,41 +1,16 @@
 import numpy as np
+import numpy
 from .params import BICEP
 a=BICEP()
 from flipper import *
+import randomstate as rnd
 
-def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,returnAll=False,padded_template=None,fourier=False):
-        """
-        Generates a GRF from an input power spectrum specified as ell, Cell 
-        BufferFactor =1 means the map will be periodic boundary function
-        BufferFactor > 1 means the map will be genrated on  a patch bufferFactor times 
-        larger in each dimension and then cut out so as to have non-periodic bcs.
-        returnAll -> if True, also return complete map without cutting down to size (if bufferFactor>1)
-        padded_template -> template map if returnAll is used
-        
-        Fills the data field of the map with the GRF realization.
-        
-        Yanked from liteMap.fillWithGaussianRandomField -> added log-spline fitting
-        """
-        import numpy
-        
-        self=liteMap
-        ft = fftTools.fftFromLiteMap(self)
-        
-        # Discard high ell pixels
-        #ft=ft.trimAtL(lCut)
-        Ny = self.Ny*bufferFactor
-        Nx = self.Nx*bufferFactor
-        #self.Nx=Nx
-        #self.Ny=Ny
-        #self.pixScaleX=ft.pixScaleX
-        #self.pixScaleY=ft.pixScaleY
-        
-        bufferFactor = int(bufferFactor)
-        
-        
-        realPart = numpy.zeros([Ny,Nx])
-        imgPart  = numpy.zeros([Ny,Nx])
-        
+def precompute(liteMap,spline,lMin=a.lMin,lMax=a.lMax):
+	""" Precompute parameters from template"""
+	 # To preload:
+	self=liteMap
+	Ny=self.Ny
+	Nx=self.Nx
         ly = numpy.fft.fftfreq(Ny,d = self.pixScaleY)*(2*numpy.pi)
         lx = numpy.fft.fftfreq(Nx,d = self.pixScaleX)*(2*numpy.pi)
         #print ly
@@ -44,33 +19,66 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
         modLMap[iy,ix] = numpy.sqrt(ly[iy]**2+lx[ix]**2)
         
 	# Fit input Cell to spline
-	from scipy.interpolate import UnivariateSpline
-	if log:
-		spl=UnivariateSpline(ell,np.log(Cell),k=5) # use a quintic spline here
-	else:
-		spl=UnivariateSpline(ell,Cell,k=5)
 	ll=np.ravel(modLMap)
-	kk=np.zeros_like(ll)#np.ones_like(ll)*1e-40
+	area = Nx*Ny*self.pixScaleX*self.pixScaleY
 	
-	# Apply filtering
-	idhi=np.where(ll>max(ell))
+	kk=np.ones_like(ll) /area * (Nx*Ny)**2 # combinatoric factors are precomputed     
+	
+        # Apply filtering
+	idhi=np.where(ll>lMax)
 	idlo=np.where(ll<lMin)
-	idgood=np.where((ll<max(ell))&(ll>lMin))
-	if log:
-		kk[idgood]=np.exp(spl(ll[idgood]))
-	else:
-		kk[idgood]=spl(ll[idgood])
-	kk[idhi]=Cell[-1] #min(kk[idgood]) # set unwanted values to small value
-	kk[idlo]=Cell[0]
+	idgood=np.where((ll<lMax)&(ll>lMin))
 	
-        area = Nx*Ny*self.pixScaleX*self.pixScaleY
-        p = numpy.reshape(kk,[Ny,Nx]) /area * (Nx*Ny)**2        
+          
+        kk[idgood]*=spline(ll[idgood])
+        maxVal,minVal=spline([lMax,lMin])
+	kk[idhi]*=maxVal #min(kk[idgood]) # set unwanted values to small value
+	kk[idlo]*=minVal
+
+        p = numpy.reshape(kk,[Ny,Nx]) 
+        rootP=np.sqrt(p)*np.sqrt(0.5)
         
+	return Nx,Ny,rootP
+	
+
+def fast_real_fill_from_Cell(liteMap,spline,precompute,bufferFactor = 1,returnAll=False,padded_template=None,fourier=False,real=True,lMin=a.lMin,lMax=a.lMax):
+        """
+        Generates a GRF from an input power spectrum specified as a precomputed spline
+        BufferFactor =1 means the map will be periodic boundary function
+        BufferFactor > 1 means the map will be genrated on  a patch bufferFactor times 
+        larger in each dimension and then cut out so as to have non-periodic bcs.
+        returnAll -> if True, also return complete map without cutting down to size (if bufferFactor>1)
+        padded_template -> template map if returnAll is used
+        real -> whether to also return real space map
+        
+        Fills the data field of the map with the GRF realization.
+        
+        Yanked from liteMap.fillWithGaussianRandomField -> added log-spline fitting
+        """
+        
+        Nx,Ny,rootP=precompute # load precomputed components
+        
+        if bufferFactor!=1:
+        	raise Exception('Only set up for unit buffer factor')
+        
+        #ft = fftTools.fftFromLiteMap(self)
+        
+        #self.Nx=Nx
+        #self.Ny=Ny
+        #self.pixScaleX=ft.pixScaleX
+        #self.pixScaleY=ft.pixScaleY
+        #p[p<0.]=0.
        	# Compute real + imag parts
-	realPart = np.sqrt(p)*np.random.randn(Ny,Nx)*np.sqrt(0.5)
-	imgPart = np.sqrt(p)*np.random.randn(Ny,Nx)*np.sqrt(0.5)
+	realPart =rootP*rnd.standard_normal([Ny,Nx],method='zig')
+	imgPart = rootP*rnd.standard_normal([Ny,Nx],method='zig')
 	
         kMap = realPart+1.0j*imgPart
+        del realPart,imgPart,rootP
+        
+        if fourier and not real:
+        	return kMap
+        	
+        self=liteMap
         
         #data = numpy.real(numpy.fft.ifft2(kMap)) 
         data=numpy.fft.ifft2(kMap)
@@ -87,7 +95,143 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
         		return self,kMap
         	return self
 
-def padded_fill_from_Cell(padded_mask,ell,Cell,lMin=a.lMin):
+
+def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,returnAll=False,padded_template=None,fourier=False,precomp=None):
+        """
+        Generates a GRF from an input power spectrum specified as ell, Cell 
+        BufferFactor =1 means the map will be periodic boundary function
+        BufferFactor > 1 means the map will be genrated on  a patch bufferFactor times 
+        larger in each dimension and then cut out so as to have non-periodic bcs.
+        returnAll -> if True, also return complete map without cutting down to size (if bufferFactor>1)
+        padded_template -> template map if returnAll is used
+        
+        Fills the data field of the map with the GRF realization.
+        
+        Yanked from liteMap.fillWithGaussianRandomField -> added log-spline fitting
+        """
+        import numpy
+        
+        self=liteMap
+        if precomp!=None:
+        	Nx,Ny,rootP=precomp # load precomputed components
+        
+        	realPart =rootP*rnd.standard_normal([Ny,Nx],method='zig')
+		imgPart = rootP*rnd.standard_normal([Ny,Nx],method='zig')
+	
+        	kMap = realPart+1.0j*imgPart
+        	del realPart,imgPart,rootP
+        
+        else:
+        	ft = fftTools.fftFromLiteMap(self)
+	        
+	        Ny = self.Ny*bufferFactor
+	        Nx = self.Nx*bufferFactor
+	        #self.Nx=Nx
+	        #self.Ny=Ny
+	        #self.pixScaleX=ft.pixScaleX
+	        #self.pixScaleY=ft.pixScaleY
+	        
+	        bufferFactor = int(bufferFactor)
+	        
+	        
+	        realPart = numpy.zeros([Ny,Nx])
+	        imgPart  = numpy.zeros([Ny,Nx])
+	        
+	        ly = numpy.fft.fftfreq(Ny,d = self.pixScaleY)*(2*numpy.pi)
+	        lx = numpy.fft.fftfreq(Nx,d = self.pixScaleX)*(2*numpy.pi)
+	        #print ly
+	        modLMap = numpy.zeros([Ny,Nx])
+	        iy, ix = numpy.mgrid[0:Ny,0:Nx]
+	        modLMap[iy,ix] = numpy.sqrt(ly[iy]**2+lx[ix]**2)
+	        
+		# Fit input Cell to spline
+		from scipy.interpolate import UnivariateSpline
+		if log:
+			spl=UnivariateSpline(ell,np.log(Cell),k=5) # use a quintic spline here
+		else:
+			spl=UnivariateSpline(ell,Cell,k=5)
+		ll=np.ravel(modLMap)
+		kk=np.zeros_like(ll)#np.ones_like(ll)*1e-40
+		
+		# Apply filtering
+		idhi=np.where(ll>max(ell))
+		idlo=np.where(ll<lMin)
+		idgood=np.where((ll<max(ell))&(ll>lMin))
+		if log:
+			kk[idgood]=np.exp(spl(ll[idgood]))
+		else:
+			kk[idgood]=spl(ll[idgood])
+		kk[idhi]=Cell[-1] #min(kk[idgood]) # set unwanted values to small value
+		kk[idlo]=Cell[0]
+		
+	        area = Nx*Ny*self.pixScaleX*self.pixScaleY
+	        p = numpy.reshape(kk,[Ny,Nx]) /area * (Nx*Ny)**2        
+	        #p[p<0.]=0.
+	       	# Compute real + imag parts
+		realPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx],method='zig')*np.sqrt(0.5)
+		imgPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx],method='zig')*np.sqrt(0.5)
+		
+	        kMap = realPart+1.0j*imgPart
+	        del realPart,imgPart,kk,ll
+	        
+        #data = numpy.real(numpy.fft.ifft2(kMap)) 
+        data=numpy.fft.ifft2(kMap)
+        
+        b = bufferFactor
+        self.data = data[(b-1)/2*self.Ny:(b+1)/2*self.Ny,(b-1)/2*self.Nx:(b+1)/2*self.Nx]
+        
+        if returnAll:
+        	selfAll=padded_template.copy()
+        	selfAll.data=data[:selfAll.Ny,:selfAll.Nx]
+        	return self,selfAll
+        else:
+        	if fourier:
+        		return self,kMap
+        	return self
+
+def fast_padded_fill_from_Cell(padded_mask,spline,precomp=None,lMin=a.lMin,lMax=a.lMax,unPadded=False):
+	""" Function to fill + pad a fourier map with a Gaussian random field implementation of an input Cell_BB spectrum.
+	This is sped up by passing a precomputed spline rather than ell, Cell.
+	
+	Input: 
+	padded_mask - mask for generating fourier transforms
+	spline fit to ell-Cell data
+	lMin - minimum ell pixel to fill
+	padding_ratio - ratio of padded-to-unpadded map width
+	
+	Output: fourier map with GRF from isotropic realisation of Cell spectrum
+	"""
+	# First compute a realisation of the isotropic Cell spectrum
+	from .RandomField import fast_real_fill_from_Cell
+	
+	if precomp==None:
+		from .RandomField import precompute
+		precomp=precompute(padded_mask.copy(),lMin,lMax)
+	
+	if unPadded: # no padding applied
+		kMap=fast_real_fill_from_Cell(padded_mask.copy(),spline,precomp,bufferFactor=1,fourier=True,real=False,lMin=lMin,lMax=lMax)
+		template=fftTools.fftFromLiteMap(padded_mask)
+		template.kMap=kMap
+		return template
+	
+	real_map,kMap=fast_real_fill_from_Cell(padded_mask.copy(),spline,bufferFactor=1,lMin=lMin,lMax=lMax,log=True,fourier=True)
+	
+   	# Now zero pad this to desired ratio
+   	#from .PaddedPower import zero_padding
+   	#pad_real=zero_padding(real_map,padding_ratio)
+   	
+   	real_map.data*=padded_mask.data # multiply by mask
+   	windowFactor=np.mean(padded_mask.data**2.) # <W^2> factor 
+   	
+   	# Now compute fourier spectrum
+   	fourier_real=fftTools.fftFromLiteMap(real_map)
+   	fourier_real.kMap/=np.sqrt(windowFactor) # account for window factor
+   	
+   	return fourier_real
+	
+
+
+def padded_fill_from_Cell(padded_mask,ell,Cell,lMin=a.lMin,unPadded=False,precomp=None):
 	""" Function to fill + pad a fourier map with a Gaussian random field implementation of an input Cell_BB spectrum.
 	
 	Input: 
@@ -101,7 +245,12 @@ def padded_fill_from_Cell(padded_mask,ell,Cell,lMin=a.lMin):
 	"""
 	# First compute a realisation of the isotropic Cell spectrum
 	from .RandomField import real_fill_from_Cell
-	real_map=real_fill_from_Cell(padded_mask.copy(),ell,Cell,bufferFactor=1,lMin=lMin,log=True,fourier=False)
+	real_map,kMap=real_fill_from_Cell(padded_mask.copy(),ell,Cell,bufferFactor=1,lMin=lMin,log=True,fourier=True,precomp=precomp)
+	
+	if unPadded: # no padding applied
+		template=fftTools.fftFromLiteMap(padded_mask)
+		template.kMap=kMap
+		return template
 	
    	# Now zero pad this to desired ratio
    	#from .PaddedPower import zero_padding

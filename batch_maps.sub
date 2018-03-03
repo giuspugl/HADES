@@ -6,9 +6,9 @@ getenv			= true
 arguments               = "$(Process)"
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
-request_memory		= 2500
+request_memory		= 2000
 log                     = /dev/null
 output			= batch_maps.out
 error			= batch_maps.error
 notification		= never
-queue 300
+queue 250#10000

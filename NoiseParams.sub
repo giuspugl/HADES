@@ -11,5 +11,4 @@ log                     = /dev/null
 error 			= noise_params.error
 output			= noise_params.out
 notification		= never
-queue 2410#30000
-#320000
+queue 860

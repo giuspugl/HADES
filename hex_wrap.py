@@ -59,7 +59,6 @@ if __name__=='__main__':
 			from hades.NoiseParams import sendMail
 			sendMail('Single Map')
 
-
 def low_dust_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
     slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,debiasAmplitude=True):
     """Use modified KK14 estimators to compute polarisation hexadecapole amplitude and angle via Afs,Afc parameters.

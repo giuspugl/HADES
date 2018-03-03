@@ -167,8 +167,10 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
 
 def DegradeMap(liteMap,lCut):
 	"""Remove unnecessary high-ell data from litemap by Fourier transforming. This returns a real space map."""
-	fPad=fftTools.fftFromLiteMap(liteMap)
-	fPad=fPad.trimAtL(lCut)
+	fPadOld=fftTools.fftFromLiteMap(liteMap)
+	fPad=fPadOld.trimAtL(lCut)
+	factor=fPadOld.pixScaleX*fPadOld.pixScaleY/(fPad.pixScaleX*fPad.pixScaleY) # ratio of areas in ell-space
+	fPad.kMap*=factor
 	pad_new=liteMap.copy()
 	pad_new.Nx=fPad.Nx
 	pad_new.Ny=fPad.Ny
@@ -176,11 +178,21 @@ def DegradeMap(liteMap,lCut):
 	pad_new.pixScaleY=fPad.pixScaleY
 	pad_new.data=np.real(np.fft.ifft2(fPad.kMap))
 	return pad_new
+
+def DegradeFourier(fMap,lCut):
+	"""Remove unnecessary high-ell data from Fourier transform map, keeping the same power in the remaining pixels."""
+	fPadOld=fMap.copy()
+	fPad=fPadOld.trimAtL(lCut) # cut out high ell pixels
+	factor=fPadOld.pixScaleX*fPadOld.pixScaleY/(fPad.pixScaleX*fPad.pixScaleY) # rescale to keep power consistent
+	fPad.kMap*=factor
+	return fPad
 	
-def fourier_noise_test(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False):
+def fourier_noise_test(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False,log=False):
+	""" See fourier_noise_map for header info."""
 	from .RandomField import real_fill_from_Cell
-	initial_map,kMap=real_fill_from_Cell(unpadded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False,fourier=True)
+	initial_map,kMap=real_fill_from_Cell(unpadded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=log,fourier=True)
 	from .PaddedPower import zero_padding
+	padded_mask=zero_padding(unpadded_mask.copy(),padding_ratio) # to avoid small length differences
 	padded_map=zero_padding(initial_map,padding_ratio)
 	padded_map.data*=padded_mask.data
 	#initial_map.data*=unpadded_mask.data
@@ -188,10 +200,11 @@ def fourier_noise_test(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.p
 	fPadded.kMap/=np.sqrt(np.mean(padded_mask.data**2.))
 	fUnpadded=fftTools.fftFromLiteMap(unpadded_mask) # template
 	fUnpadded.kMap=kMap
+	del initial_map,padded_mask,unpadded_mask,padded_map,kMap
 	#fUnpadded.kMap/=np.sqrt(np.mean(unpadded_mask.data**2.))
 	return fPadded,fUnpadded
     
-def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False):
+def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.padding_ratio,unpadded=False,log=False):
 	""" Create a fourier space map of dust with given noise parameters. This is padded to the desired padding ratio.
 	
 	Inputs: padded_mask -> mask file, with appropriate padding - used as a real-space template here
@@ -199,11 +212,12 @@ def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.pa
 	ell,CellNoise -> C_l for noise spectrum
 	padding_ratio -> ratio of padded map width to unpadded map width
 	unpadded -> whether to also return unpadded noise map
+	log -> use logarithmic interpolation when generating the ell-Cell function
 	"""	
 	# First compute a large real space map based on the power spectrum
 	if unpadded:
 		from .RandomField import real_fill_from_Cell
-		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False)
+		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=log)
 		unpadded_noise=unpadded_mask.copy()
 		Xstart=int((noise_map.Nx-unpadded_noise.Nx)/2.)
 		Ystart=int((noise_map.Ny-unpadded_noise.Ny)/2.)
@@ -213,7 +227,7 @@ def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.pa
 		unpadded_noise_fourier=fftTools.fftFromLiteMap(unpadded_noise)
 	else:
 		from .RandomField import real_fill_from_Cell
-		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=False) # compute in linear space
+		noise_map=real_fill_from_Cell(padded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=log) # compute in linear space
 	
    	# Now zero pad this to desired ratio
    	#from .PaddedPower import zero_padding
@@ -255,13 +269,14 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
     maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
     
-    
     # Compute zero-padded maps (including mask map)
     from .PaddedPower import zero_padding
     zTmap=zero_padding(Tmap,padding_ratio)
     zQmap=zero_padding(Qmap,padding_ratio)
     zUmap=zero_padding(Umap,padding_ratio)
     zWindow=zero_padding(maskMap,padding_ratio)
+    
+    del Tmap,Qmap,Umap
     
     # Compute window factor <W^2> for padded window (since this is only region with data)
     windowFactor=np.mean(zWindow.data**2.)
@@ -271,6 +286,9 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
 
     # Create pure T,E,B maps using 'hybrid' method to minimize E->B leakage
     _,_,fB=fp.fftPol.TQUtoPureTEB(zTmap,zQmap,zUmap,zWindow,modL,angL,method='hybrid')
+    
+    del zTmap,zQmap,zUmap,modL,angL
+    
     # Rescale to correct amplitude using dust SED
     from .PowerMap import dust_emission_ratio
     dust_intensity_ratio=dust_emission_ratio(freq)
@@ -289,6 +307,7 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     rest_index=np.where(fB.modLMap!=min(fB.modLMap.ravel())) 
     index2=np.where(fB.modLMap==min(fB.modLMap[rest_index].ravel())) # next to centre
     fB.kMap[index]=np.mean(fB.kMap[index2]) # replace pixel
+    del index,rest_index,index2
     
     if power:
     	# Transform into power space
@@ -306,13 +325,16 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     	elif fourier:
     		return fB,zWindow,maskMap
     	elif power:
+    		del fB
     		return BB,zWindow,maskMap
     else:
+    	del zWindow,maskMap
     	if fourier and power:
 		return fB,BB
 	elif fourier:
 		return fB
 	elif power:
+		del fB
 	    	return BB
     
 def zero_padding(tempMap,padding_factor):

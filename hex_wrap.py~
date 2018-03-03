@@ -58,7 +58,7 @@ if __name__=='__main__':
 		if a.send_email:
 			from hades.NoiseParams import sendMail
 			sendMail('Single Map')
-
+h
 
 def low_dust_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
     slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,debiasAmplitude=True):
@@ -851,7 +851,10 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 	A_MC_std=np.std(A_patch_MC)
 	
 	# Compute significance of detection
-	sigmas=(hex2_patch)/MC_std#-MC_mean)/MC_std
+	if a.useBias:
+		sigmas=(hex2_patch)/MC_std#-MC_mean)/MC_std
+	else:
+		sigmas=(hex2_patch-MC_mean)/MC_std # remove bias here
 	sigmasA=(A_patch-A_MC_mean)/A_MC_std
 	
 	if plot:

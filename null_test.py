@@ -64,13 +64,16 @@ if __name__=='__main__':
 	
 	print "Task %s tile %s complete in %s seconds" %(param_id,batch_id,time.time()-start_time)
 	
-	if batch_id==len(a.f_dust_all)*len(goodIDs)-2:
+	if (map_id==len(goodIDs)-1) and (param_id==len(a.f_dust_all)-1):
 		if a.send_email:
 			from hades.NoiseParams import sendMail
 			sendMail('Single Map Null Test')
 			
-def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,delensing_fraction=a.delensing_fraction,freq=a.freq,root_dir=a.root_dir):
+def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,delensing_fraction=a.delensing_fraction,freq=a.freq,root_dir=a.root_dir,\
+		folder=None):
 	""" Recreate + plot significances from parameters."""
+	if folder==None:
+		folder='NullTestBatchData'
 	from hades.hex_wrap import patch_hexadecapole
 	mean,err=[np.zeros(len(a.f_dust_all)) for _ in range(2)]
 	for i in range(len(a.f_dust_all)):
@@ -78,7 +81,7 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 		for j in range(a.err_repeats):
 			suffix='_'+str(i)+'_'+str(j)
 			outs=patch_hexadecapole(suffix=suffix,map_size=map_size,sep=sep,FWHM=FWHM,noise_power=noise_power,\
-				delensing_fraction=delensing_fraction,freq=freq,folder='NullTestBatchData',plot=False)
+				delensing_fraction=delensing_fraction,freq=freq,folder=folder,plot=False)
 			sigs.append(outs[0])
 		mean[i]=np.mean(sigs)
 		if a.err_repeats!=1:
@@ -97,13 +100,14 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	plt.rc('text', usetex=True)
 	plt.rc('font', family='serif')
 	plt.xlabel(r'$f_\mathrm{dust}$')
-	plt.xscale('log')
+	#plt.xscale('log')
 	plt.ylabel(r'Detection Significance')
 	plt.title(r'Null Test Significances')
 	outDir=root_dir+'NullTests/'
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)
+	np.savez(outDir+'Data_f%s_ms%s_s%s_fw%s_np%s_d%s' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),f_dust=a.f_dust_all,mean=mean,err=err)
 	plt.savefig(outDir+'NullTestPaddedPlot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
 	plt.close()
 	

@@ -24,13 +24,13 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	index = 0 # for counting
 	import os
 	
-	A,eps,eps_err,eps_mean,angle,angle_err=[],[],[],[],[],[]
+	A,eps,eps_err,eps_mean,angle,angle_err,H2,H2_mean,H2_err=[],[],[],[],[],[],[],[],[]
 	
 	# Now iterate over files
 	while True:
 		if index%1000==0:
 			print index
-		fileName=root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
+		fileName=root_dir+'DebiasedBatchDataFull/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
     		if not os.path.exists(fileName):
         		print 'no more dat at %s' %index
         		break
@@ -42,6 +42,9 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 		eps_mean.append(data[5][1]) 
 		angle.append(data[6][0])
 		angle_err.append(data[6][2])
+		H2.append(data[9][0])
+		H2_mean.append(data[9][1])
+		H2_err.append(data[9][2])
 		index+=1
 		
 	# Remove any extras
@@ -60,11 +63,13 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 		eps_err=np.array(eps_err)[ids]
 		angle=np.array(angle)[ids]
 		angle_err=np.array(angle_err)[ids]
-		
+		H2=np.array(H2)[ids]
+		H2_mean=np.array(H2_mean)[ids]
+		H2_err=np.array(H2_err)[ids]
 	# Save output
 	np.savez(root_dir+'all_dat%s_f%s_ms%s_s%s_fw%s_np%s_d%s.npz' %(maxDec,freq,map_size,sep,FWHM,noise_power,delensing_fraction),ras=ras,decs=decs,\
 		A=A,eps=eps,eps_mean=eps_mean,eps_err=eps_err,\
-		angle=angle,angle_err=angle_err)
+		angle=angle,angle_err=angle_err,H2=H2,H2_mean=H2_mean,H2_err=H2_err)
 	
 	print 'complete'
 	

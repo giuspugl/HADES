@@ -1,78 +1,14 @@
-import numpy as np
-from flipper import *
 from hades.params import BICEP
 a=BICEP()
-
-if __name__=='__main__':
-	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
-	import time
-	start_time=time.time()
-	import sys
-	import pickle
-	sys.path.append('/data/ohep2/')
-	sys.path.append('/home/ohep2/Masters/')
-	import os
-	
-	batch_id=int(sys.argv[1]) # batch_id number
-	
-	# First load good IDs:
-	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
-	
-	outDir=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
-	
-	if a.remakeErrors:
-		if os.path.exists(outDir+'%s.npy' %batch_id):
-			print 'output exists; exiting'
-			sys.exit()
-	
-	if batch_id<110: # create first time
-		from hades.batch_maps import create_good_map_ids
-		create_good_map_ids()
-		print 'creating good IDs'
-		
-	goodIDs=np.load(goodFile)
-	
-	
-	if batch_id>len(goodIDs)-1:
-		print 'Process %s terminating' %batch_id
-		sys.exit() # stop here
-	
-	map_id=goodIDs[batch_id] # this defines the tile used here
-	
-	print '%s starting for map_id %s' %(batch_id,map_id)
-
-		
-	# Now run the estimation
-	if False: 
-		from hades.fast_wrapper import padded_wrap
-		output=padded_wrap(map_id)
-	if True:
-		from hades.padded_debiased_wrap import padded_wrap
-		output=padded_wrap(map_id)
-	else:
-		from hades.debiased_wrapper import tile_wrap
-		output=tile_wrap(map_id)
-		
-	# Save output to file
-	if not os.path.exists(outDir): # make directory
-		os.makedirs(outDir)
-		
-	np.save(outDir+'%s.npy' %batch_id, output) # save output
-	
-	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
-	
-	if batch_id==len(goodIDs)-2:
-		if a.send_email:
-			from hades.NoiseParams import sendMail
-			sendMail('Debiased Padded Single Map')
-
-
+import numpy as np
+from flipper import *
+import flipperPol as fp
 
 def padded_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
-	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded):
+	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -102,7 +38,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	10: true monopole (from noiseless simulation) - for testing
 	11th: bias (isotropic estimate of <H^2>)
 	"""
-	lCut=int(1.35*lMax) # maximum ell for Fourier space maps
+	lCut=int(1.7*lMax) # maximum ell for Fourier space maps
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
@@ -110,20 +46,20 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
-	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 	
+	
+	### TESTING
+	#from hades.RandomField import padded_fill_from_Cell
+	#ll=np.arange(5,3000)
+	#pp=1.0e-11*ll**(-2.42)
+	#fBdust=padded_fill_from_Cell(padded_window.copy(),ll,pp,lMin=lMin)#,padding_ratio=padding_ratio)
+	#unpadded_fBdust=padded_fill_from_Cell(unpadded_window.copy(),ll,pp,lMin=lMin)#,padding_ratio=padding_ratio)
+	
+	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
 	
-	if a.hexTest:
-		# TESTING - replace fourier B-mode from dust with random isotropic realisation of self
-		powDust=fftTools.powerFromFFT(fBdust) # compute power
-		from .PowerMap import oneD_binning
-		ll,pp=oneD_binning(powDust.copy(),10,lCut,l_step,binErr=False,exactCen=False) # compute one-D binned spectrum
-		from .PaddedPower import fourier_noise_test
-		fBdust,unpadded_fBdust=fourier_noise_test(padded_window,unpadded_window,ll,pp,padding_ratio=padding_ratio,unpadded=False,log=True)
-		#fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False) # generate Gaussian realisation
 	#return powDust,fBdust,unpadded_fBdust
 	# Reduce dust amplitude by 'dedusting fraction'
 	unpadded_fBdust.kMap*=f_dust
@@ -149,7 +85,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Now create a fourier space noise map	
 	from .PaddedPower import fourier_noise_map
-	ellNoise=np.arange(5,lCut) # ell range for noise spectrum
+	ellNoise=np.arange(5,3000) # ell range for noise spectrum
 	
 	from .RandomField import fill_from_model
 	#fourierNoise=fourier_noise_map
@@ -171,18 +107,12 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	unpadded_totFmap=unpadded_fBdust.copy()
 	unpadded_totFmap.kMap+=unpadded_noise.kMap
 	
-	
 	# Now convert to power-space
 	totPow=fftTools.powerFromFFT(totFmap) # total power map
 	Bpow=fftTools.powerFromFFT(fBdust) # dust only map
 	unpadded_totPow=fftTools.powerFromFFT(unpadded_totFmap)
 	
 	del fourierNoise,unpadded_noise
-	
-	if unPadded: # only use unpadded maps here
-		totFmap=unpadded_totFmap
-		totPow=unpadded_totPow
-		padded_window=unpadded_window
 				
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
@@ -208,19 +138,8 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Compute 1D power spectrum by binning in annuli
 	from .PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),10,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),10,3000,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
 	# gives central binning l and mean power in annulus using window function corrections 
-	
-	# Create spline fit
-	from scipy.interpolate import UnivariateSpline
-	spl=UnivariateSpline(l_cen,np.log(mean_pow),k=5)
-	def spline(ell):
-		return np.exp(spl(ell))
-	#del l_cen,mean_pow
-	
-	# Precompute useful data:
-	from hades.RandomField import precompute
-	precomp=precompute(padded_window.copy(),spline,lMin=lMin,lMax=lMax)
 	
 	#from .RandomField import padded_fill_from_Cell
 	#fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)#,padding_ratio=padding_ratio)
@@ -236,7 +155,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		for n in range(N_bias):
 			if n%100==0:
 				print 'Computing bias sim %s of %s' %(n+1,N_bias)
-			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
+			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)#,padding_ratio=padding_ratio)
 			bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
 			bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
 			# First compute estimators on cross-spectrum
@@ -265,7 +184,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		if n%100==0:
 			print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
 		# Create the map with a random implementation of Cell
-		fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)
+		fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)
 		MC_map=fftTools.powerFromFFT(fourier_MC_map.copy()) # create power domain map
 		
 		# Now use the estimators on the MC sims
@@ -331,5 +250,4 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Return all output
 	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC,[],HexPow2dat,trueA,bias,wCorrection,isoBias # (empty set to avoid reordering later code)
-
 

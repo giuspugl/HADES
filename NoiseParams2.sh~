@@ -1,4 +1,4 @@
-#!/bin/bash
+##!/bin/bash
 ## run python code for input file number
 #source /opt/ioa/scripts/bashrc_linux
 #source /opt/ioa/setup/setup_modules.bash
@@ -19,5 +19,5 @@
 #export PYTHONPATH=$PYTHONPATH:$HADES_DIR/python
 
 ## run code
-echo $1
+#echo $1
 #python -u /data/ohep2/hades/NoiseParams.py $1

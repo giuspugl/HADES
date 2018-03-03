@@ -252,9 +252,9 @@ def oneD_binning(powMap,lMin,lMax,l_step,binErr=False,exactCen=a.exactCen,C_ell_
 			bin_err.append(temp[1])
 	
 	if binErr:
-		return l_cen, bin_pow, bin_err
+		return np.array(l_cen), np.array(bin_pow), np.array(bin_err)
 	else:
-		return l_cen, bin_pow
+		return np.array(l_cen), np.array(bin_pow)
 
 def MapSlope(Pmap,l_min,l_max,l_step,returnFit=False):
     """ Compute slope of power spectrum of given map in the [l_min,l_max] range, using a binning of l_step. Returns power-law slope and amplitude, with covariance matrix. returnFit => Boolean - whether to return bin widths and amplitude+error"""

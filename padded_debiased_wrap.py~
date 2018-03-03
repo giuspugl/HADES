@@ -43,7 +43,10 @@ if __name__=='__main__':
 
 		
 	# Now run the estimation
-	if True:
+	if True: 
+		from hades.fast_wrapper import padded_wrap
+		output=padded_wrap(map_id)
+	if False:
 		from hades.padded_debiased_wrap import padded_wrap
 		output=padded_wrap(map_id)
 	else:
@@ -69,7 +72,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
-	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio):
+	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -99,17 +102,17 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	10: true monopole (from noiseless simulation) - for testing
 	11th: bias (isotropic estimate of <H^2>)
 	"""
-	lCut=2.*lMax # maximum ell for Fourier space maps
+	lCut=int(1.35*lMax) # maximum ell for Fourier space maps
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
-	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap
+	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
 	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
 	
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
-	unpadded_fBdust=unpadded_fBdust.trimAtL(lCut)
+	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 	
-	fBdust=fBdust.trimAtL(lCut) # discard high-ell pixels
+	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
 	
@@ -117,10 +120,11 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		# TESTING - replace fourier B-mode from dust with random isotropic realisation of self
 		powDust=fftTools.powerFromFFT(fBdust) # compute power
 		from .PowerMap import oneD_binning
-		ll,pp=oneD_binning(powDust.copy(),lMin,lMax,l_step,binErr=False,exactCen=False) # compute one-D binned spectrum
-		from .RandomField import fill_from_Cell
-		fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False) # generate Gaussian realisation
-	
+		ll,pp=oneD_binning(powDust.copy(),10,lCut,l_step,binErr=False,exactCen=False) # compute one-D binned spectrum
+		from .PaddedPower import fourier_noise_test
+		fBdust,unpadded_fBdust=fourier_noise_test(padded_window,unpadded_window,ll,pp,padding_ratio=padding_ratio,unpadded=False,log=True)
+		#fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False) # generate Gaussian realisation
+	#return powDust,fBdust,unpadded_fBdust
 	# Reduce dust amplitude by 'dedusting fraction'
 	unpadded_fBdust.kMap*=f_dust
 	fBdust.kMap*=f_dust
@@ -145,13 +149,13 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Now create a fourier space noise map	
 	from .PaddedPower import fourier_noise_map
-	ellNoise=np.arange(5,3000) # ell range for noise spectrum
+	ellNoise=np.arange(5,lCut) # ell range for noise spectrum
 	
 	from .RandomField import fill_from_model
 	#fourierNoise=fourier_noise_map
 	
 	from .PaddedPower import fourier_noise_test
-	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
+	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=True)
 	#unpadded_noise=unpadded_fBdust.copy() # this map is generated completely in Fourier space to avoid errors
 	#unpadded_noise.kMap=fill_from_model(unpadded_fBdust.copy(),total_Cl_noise,fourier=True,power=False)
 	#fourierNoise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
@@ -167,10 +171,18 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	unpadded_totFmap=unpadded_fBdust.copy()
 	unpadded_totFmap.kMap+=unpadded_noise.kMap
 	
+	
 	# Now convert to power-space
 	totPow=fftTools.powerFromFFT(totFmap) # total power map
 	Bpow=fftTools.powerFromFFT(fBdust) # dust only map
 	unpadded_totPow=fftTools.powerFromFFT(unpadded_totFmap)
+	
+	del fourierNoise,unpadded_noise
+	
+	if unPadded: # only use unpadded maps here
+		totFmap=unpadded_totFmap
+		totPow=unpadded_totPow
+		padded_window=unpadded_window
 				
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
@@ -196,8 +208,19 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Compute 1D power spectrum by binning in annuli
 	from .PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),10,3000,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),10,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
 	# gives central binning l and mean power in annulus using window function corrections 
+	
+	# Create spline fit
+	from scipy.interpolate import UnivariateSpline
+	spl=UnivariateSpline(l_cen,np.log(mean_pow),k=5)
+	def spline(ell):
+		return np.exp(spl(ell))
+	#del l_cen,mean_pow
+	
+	# Precompute useful data:
+	from hades.RandomField import precompute
+	precomp=precompute(padded_window.copy(),spline,lMin=lMin,lMax=lMax)
 	
 	#from .RandomField import padded_fill_from_Cell
 	#fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)#,padding_ratio=padding_ratio)
@@ -213,16 +236,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		for n in range(N_bias):
 			if n%100==0:
 				print 'Computing bias sim %s of %s' %(n+1,N_bias)
-			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)#,padding_ratio=padding_ratio)
-			#powBias=fftTools.powerFromFFT(fBias.copy())
-			#all_sims.append(powBias)
-			#return all_sims,l_cen,mean_pow,totPow,padded_window
-			#if True:
-			#if True:
-			#return all_sims,l_cen,mean_pow
-			#if True:
-			#	if True:
-			#fBias=fBias.trimAtL(1.5*lMax) # discard high-ell pixels
+			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
 			bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
 			bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
 			# First compute estimators on cross-spectrum
@@ -237,6 +251,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 			bias_data[n]=(-1.*(self_ests[3]**4.+self_ests[4]**2.)+4.*(cross_ests[3]**2.+cross_ests[4]**2.))*wCorrection
 		# Now compute the mean bias - this debiases the DATA only
 		bias=np.mean(bias_data)
+		del bias_self,bias_cross
 	else:
 		print 'No bias subtraction'
 		bias=0.
@@ -247,11 +262,10 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	#MC_map=totPow.copy() # template for SIM-SIM data
 	
 	for n in range(N_sims): # for each MC map
-		if n%50==0:
+		if n%100==0:
 			print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
 		# Create the map with a random implementation of Cell
-		fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin)
-		#fourier_MC_map=fourier_MC_map.trimAtL(1.5*lMax)
+		fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)
 		MC_map=fftTools.powerFromFFT(fourier_MC_map.copy()) # create power domain map
 		
 		# Now use the estimators on the MC sims
@@ -270,9 +284,15 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		ang_MC[n]=0.25*180./np.pi*np.arctan(output[3]/output[4]) # NB: this is not corrected for bias
 		HexPow2_MC[n]=(output[3]**2.+output[4]**2.)*wCorrection 
 	if useBias:	
-		HexPow2_MC-=np.mean(HexPow2_MC)*np.ones_like(HexPow2_MC) # remove the bias (i.e. mean of H^2 from all sims)
-	
+		isoBias=np.mean(HexPow2_MC)
+		HexPow2_MC-=isoBias*np.ones_like(HexPow2_MC) # remove the bias (i.e. mean of H^2 from all sims)
+	else:
+		isoBias=0.
+		
 	print 'MC sims complete'	
+	
+	del fourier_MC_map,MC_map,totFmap,unpadded_totFmap,totPow,unpadded_totPow,padded_window,unpadded_window # delete unneeded variables
+	
 	# Regroup data
 	allMC=[A_MC,fs_MC,fc_MC,Afs_MC,Afc_MC,epsilon_MC,ang_MC,HexPow2_MC]
 	
@@ -310,6 +330,6 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	HexPow2dat=[HexPow2_est,HexPow2_mean,HexPow2_std] # hexadecapole amplitude
 	
 	# Return all output
-	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC,[],HexPow2dat,trueA,bias # (empty set to avoid reordering later code)
+	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC,[],HexPow2dat,trueA,bias,wCorrection,isoBias # (empty set to avoid reordering later code)
 
 

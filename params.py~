@@ -12,20 +12,22 @@ class BICEP:
 	map_size =  3 # Width of each map
 	sep = 3 # Separation of map centres
 	
-	N_sims = 500#0 # Number of MC sims
-	N_bias = 500# no. sims used for bias computation
+	N_sims = 250 # Number of MC sims
+	N_bias = 250 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
-	padding_ratio=1 # padded map width / original map width 
+	padding_ratio=2. # padded map width / original map width 
+	unPadded=False # do not apply any zero-padding if true
+	
+	useQU=False # use root(Q^2+U^2) maps for dedusting - else use I maps
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
-	lMin = 120.#180.*3./map_size*1./padding_ratio
-	if padding_ratio=1:
+	if padding_ratio==1:
 		lMin=180.*3./map_size
 	else:
-		lMin=240.*3./map_size*1./padding_ratio
+		lMin=180.*3./map_size*1./padding_ratio #240.*3./map_size*1./padding_ratio
 	lMax = 2000. # ranges to fit spectrum over 
-	f_dust=0.1
+	f_dust=1.0
 
 	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
@@ -43,7 +45,7 @@ class BICEP:
 		noise_power=3.
 	else:
 		FWHM = 1.5 # full width half maximum of beam in arcmin
-		noise_power = 1. # noise power of BICEP -> in microK-arcmin
+		noise_power = 1.# noise power of BICEP -> in microK-arcmin
 	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
@@ -56,11 +58,12 @@ class BICEP:
 	
 	# NoiseParamsSpace parameters
 	remakeErrors=True
-	noi_par_NoisePower=np.arange(1e-60,5.1,0.1)#'0.2) #)np.arange(1e-30,2.1,0.16)#np.arange(1e-30,5.1,0.4)
-	noi_par_FWHM=np.arange(0,31.,1.)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
+	noi_par_NoisePower=np.linspace(0.1,5.1,20)#'0.2) #)np.arange(1e-30,2.1,0.16)#np.arange(1e-30,5.1,0.4)
+	noi_par_FWHM=np.linspace(0,31.,20)#1.25)#np.arange(0,11,0.8)#np.arange(0,31,2.5)
+	noi_par_delensing=[0.1,1.0]
 	
 	# Null testing parameters
-	f_dust_all = np.logspace(-3,0,30)#np.arange(1.,-0.05,-0.05)
+	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05)
 	err_repeats = 10 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS

@@ -14,7 +14,7 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	
 	# First load in coordinates
 	import pickle
-	map_dir='/data/ohep2/FullSky/%sdeg%s/' %(map_size,sep)
+	map_dir=root_dir+'%sdeg%s/' %(map_size,sep)
 	full_ras=pickle.load(open(map_dir+'fvsmapRas.pkl','rb'))
 	full_decs=pickle.load(open(map_dir+'fvsmapDecs.pkl','rb'))
 	goodMap=pickle.load(open(map_dir+'fvsgoodMap.pkl','rb'))
@@ -30,7 +30,7 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	while True:
 		if index%1000==0:
 			print index
-		fileName=root_dir+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
+		fileName=root_dir+'DebiasedBatchDataFull/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
     		if not os.path.exists(fileName):
         		print 'no more dat at %s' %index
         		break
