@@ -6,19 +6,20 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/liteBIRD/'#'/data/ohep2/{Simons/,sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
-	sep = 0.5 # Separation of map centres
+	sep = 3 # Separation of map centres
 	
-	N_sims = 250 # Number of MC sims
-	N_bias = 250 # no. sims used for bias computation
+	N_sims = 500 # Number of MC sims
+	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
 	padding_ratio=2. # padded map width / original map width 
 	unPadded=False # do not apply any zero-padding if true
 	
-	useQU=False # use root(Q^2+U^2) maps for dedusting - else use I maps
+	useQU=True # use root(Q^2+U^2) maps for dedusting - else use I maps
+	rTest = False # replace data with r= 0.1 spectrum
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
@@ -43,6 +44,10 @@ class BICEP:
 	if root_dir=='/data/ohep2/liteBIRD/':
 		FWHM=30.
 		noise_power=3.
+		lMax=1000
+	elif root_dir=='/data/ohep2/Simons/':
+		FWHM=1.8
+		noise_power=5.
 	else:
 		FWHM = 1.5 # full width half maximum of beam in arcmin
 		noise_power = 1.# noise power of BICEP -> in microK-arcmin
@@ -63,7 +68,7 @@ class BICEP:
 	noi_par_delensing=[0.1,1.0]
 	
 	# Null testing parameters
-	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05)
+	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#
 	err_repeats = 10 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
@@ -71,12 +76,12 @@ class BICEP:
 	rot=11.25 # pre rotation before applying estimators
 	useBias=True # correct for SIM-SIM - DATA-SIM bias
 	useTensors=False #True # include r = 0.1 tensor modes
-	I2SNR = True # use <I^2> to estimate the SNR for patch anisotropy measurements
+	I2SNR = False # use <I^2> to estimate the SNR for patch anisotropy measurements
 	debiasA = True # for debiasing of monopole amplitude using noise only sims
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
-	send_email=True # send email on completion
+	send_email=False # send email on completion
 	repeat=1#50#200 # repeat application of noise + estimation to see errors
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)

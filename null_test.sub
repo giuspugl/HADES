@@ -11,4 +11,4 @@ log                     = /dev/null
 output			= null_test.out
 error			= null_test.error
 notification		= never
-queue 5500
+queue 7000

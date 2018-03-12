@@ -152,10 +152,24 @@ def r_Cl():
 	# Convert to K^2
 	Cl_r_K=Cl_r*(1.0e-6)**2.
 	
-	# Interpolate data
-	from scipy.interpolate import interp1d
-	Cl_interp=interp1d(ells,Cl_r_K) # account for delensing
+	minCl=min(Cl_r_K[Cl_r_K!=0.]) # avoid zeros
+	maxCl=max(Cl_r_K[Cl_r_K!=0.])
 	
+	# Interpolate data	
+	from scipy.interpolate import interp1d
+	interp=interp1d(ells,Cl_r_K) # account for delensing
+				
+	def Cl_interp(ell):
+		out=np.zeros(len(ell))
+		for li,l in enumerate(ell):
+			if l>ells[598]:
+				out[li]=minCl
+			elif l<min(ells):
+				out[li]=maxCl
+			else:
+				out[li]=interp(l)
+		return out
+		
 	return Cl_interp
 
 def noise_map(realMap=None,powMap=None,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\

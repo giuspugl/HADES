@@ -108,6 +108,13 @@ def tile_wrap(map_id,map_size=a.map_size,\
 		from .RandomField import fill_from_Cell
 		fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False)
 	
+	if a.rTest:
+		from hades.NoisePower import r_Cl
+		from .RandomField import fill_from_Cell
+		ll=np.arange(5,3000)
+		pp=r_Cl(ll)
+		fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False,lMin=10)
+	
 	# Reduce dust amplitude by 'dedusting fraction'
 	fBdust.kMap*=f_dust
 	

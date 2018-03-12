@@ -110,8 +110,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
-	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
-	
+	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)

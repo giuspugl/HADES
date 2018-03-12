@@ -18,8 +18,11 @@ if __name__=='__main__':
 	
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
-	
-	outDir=a.root_dir+'DedustingI/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	if a.useQU:
+		t='QU'
+	else:
+		t='I'
+	outDir=a.root_dir+'Dedusting%s/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(t,a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if a.remakeErrors:
 		if os.path.exists(outDir+'%s.npy' %batch_id):
@@ -44,20 +47,21 @@ if __name__=='__main__':
 
 		
 	from hades.dedusting import compute_angle
-	output=compute_angle(map_id)
+	angle,ratio=compute_angle(map_id)
 		
 	# Save output to file
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
 		
-	np.save(outDir+'%s.npy' %batch_id, output) # save output
+	np.save(outDir+'A%s.npy' %batch_id, angle) # save output
+	np.save(outDir+'R%s.npy' %batch_id, ratio) # save output
 	
 	print "Job %s complete in %s seconds" %(batch_id,time.time()-start_time)
 	
 	if batch_id==len(goodIDs)-2:
 		if a.send_email:
 			from hades.NoiseParams import sendMail
-			sendMail('Angle Maps')
+			sendMail('Angle + Ratio Maps')
 
 
 
@@ -121,6 +125,11 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
     Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
     QUmap=Qmap.copy()
     QUmap.data=np.sqrt(Qmap.data**2.+Umap.data**2.)
+    if useQU:
+    	scaling=np.mean(QUmap.data**4.)
+    else:
+    	scaling=np.mean(Tmap.data**4.)
+    
     maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
     from hades.PaddedPower import zero_padding
     zTmap=zero_padding(Tmap,padding_ratio)
@@ -152,7 +161,8 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
     powBtrue=fftTools.powerFromFFT(fBtrue)
     from hades.KKdebiased import derotated_estimator
     output=derotated_estimator(powBtrue,map_id,lMin=lMin,lMax=lMax,FWHM=FWHM,noise_power=noise_power,delensing_fraction=delensing_fraction,slope=slope)
-    A,Afs,Afc,fs,fc,_=output
+    A,fs,fc,Afs,Afc,_=output
+    HexPow2=Afs**2.+Afc**2.
     norm=np.sqrt(Afs**2.+Afc**2.)
     fsbar,fcbar=Afs/norm,Afc/norm
 
@@ -185,5 +195,10 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
     if sign==-1.0:
         alpha0+=np.pi/2.
        
+    # Step 7: Compute the ratio of H^2/<I^4> for rescaling
+    ratio=(HexPow2/scaling)**0.25
+    
     alpha_deg=alpha0*180./np.pi
-    return alpha_deg
+    print 'MapID: %s Angle: %.2f Ratio: %.2e' %(map_id,alpha_deg,ratio)
+    
+    return alpha_deg,ratio

@@ -129,7 +129,7 @@ def tile_wrap(map_id,map_size=a.map_size,\
 	from .RandomField import fill_from_model,fill_from_Cell
 	fourierNoise=fBdust.copy() # template
 	fourierNoise.kMap=fill_from_model(fourierNoise.copy(),total_Cl_noise,fourier=True,power=False)
-	return fftTools.powerFromFFT(fourierNoise)
+	#return fftTools.powerFromFFT(fourierNoise)
 		
 	# Compute total map
 	totFmap=fBdust.copy()

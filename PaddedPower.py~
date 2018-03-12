@@ -256,7 +256,7 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     fourier (return fourier space map?)
     power (return power map?)
     returnMasks (return real-space mask windows?)
-   
+
     Output: B-mode map in power-space , B-mode map in Fourier-space  
     """
     import flipperPol as fp

@@ -290,10 +290,11 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     del zTmap,zQmap,zUmap,modL,angL
     
     # Rescale to correct amplitude using dust SED
-    from .PowerMap import dust_emission_ratio
-    dust_intensity_ratio=dust_emission_ratio(freq)
+    if not a.root_dir== '/data/ohep2/rTest/':
+    	from .PowerMap import dust_emission_ratio
+    	dust_intensity_ratio=dust_emission_ratio(freq)
     
-    fB.kMap*=dust_intensity_ratio # apply dust-reduction factor 
+    	fB.kMap*=dust_intensity_ratio # apply dust-reduction factor 
     #fE.kMap*=dust_intensity_ratio
     #fT.kMap*=dust_intensity_ratio  
 
