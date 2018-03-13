@@ -35,6 +35,8 @@ class BICEP:
 	dust_spectral_index = 1.53 # Planck Intermediate LIV
 	reference_frequency = 353 # in GHz for input sims
 	
+	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
+	
 	# Noise model
 	## Defaults:
 	# BICEP: (30,5)
@@ -45,6 +47,10 @@ class BICEP:
 		FWHM=30.
 		noise_power=3.
 		lMax=1000
+		lMin=120.
+		padding_ratio=1.
+		unPadded=True
+		delensing_fraction=0.5
 	elif root_dir=='/data/ohep2/Simons/':
 		FWHM=1.8
 		noise_power=5.
@@ -55,7 +61,6 @@ class BICEP:
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
-	delensing_fraction = 0.1 # efficiency of delensing -> 1 = no delensing
 	rot_average = True # pre-rotate to correct for pixellations
 	
 	# Fiducial C_l 
@@ -69,7 +74,7 @@ class BICEP:
 	
 	# Null testing parameters
 	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#
-	err_repeats = 10 # repeat for uncertainties
+	err_repeats = 1#0 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
 	hexTest = False#True # test methods using fake isotropic map

@@ -52,7 +52,8 @@ if __name__=='__main__':
 	else:
 		from hades.debiased_wrapper import tile_wrap
 		output=tile_wrap(map_id)
-		
+	
+	print output	
 	# Save output to file
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
@@ -108,9 +109,12 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
 	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
 	
+	if np.sum(unpadded_window.data.ravel())==0.:
+		print 'no data here'
+		return 1 # no data in this pixel
+			
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
-
 	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
@@ -177,13 +181,17 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	Bpow=fftTools.powerFromFFT(fBdust) # dust only map
 	unpadded_totPow=fftTools.powerFromFFT(unpadded_totFmap)
 	
+	
 	del fourierNoise,unpadded_noise
 	
 	if unPadded: # only use unpadded maps here
 		totFmap=unpadded_totFmap
 		totPow=unpadded_totPow
 		padded_window=unpadded_window
-				
+			
+			
+	#return totPow,Bpow
+		
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
 	p=derotated_estimator(Bpow.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,factor=None,FWHM=0.,\
@@ -208,7 +216,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Compute 1D power spectrum by binning in annuli
 	from .PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),10,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),l_step,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
 	# gives central binning l and mean power in annulus using window function corrections 
 	
 	# Create spline fit
@@ -281,7 +289,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		Afs_MC[n]=output[3] # these are fundamental quantities here
 		Afc_MC[n]=output[4]
 		epsilon_MC[n]=np.sqrt((output[3]**2.+output[4]**2.)*wCorrection)/output[0] # NOT corrected for bias in <H^2>
-		ang_MC[n]=0.25*180./np.pi*np.arctan(output[3]/output[4]) # NB: this is not corrected for bias
+		ang_MC[n]=0.25*180./np.pi*np.arctan2(output[3],output[4]) # NB: this is not corrected for bias
 		HexPow2_MC[n]=(output[3]**2.+output[4]**2.)*wCorrection 
 	if useBias:	
 		isoBias=np.mean(HexPow2_MC)
@@ -297,7 +305,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	allMC=[A_MC,fs_MC,fc_MC,Afs_MC,Afc_MC,epsilon_MC,ang_MC,HexPow2_MC]
 	
 	# Compute anisotropy fraction and angle from data
-	ang_est=0.25*180./np.pi*(np.arctan(Afs_est/Afc_est)) # in degrees (already corrected for rotation) - NB: not debiased
+	ang_est=0.25*180./np.pi*(np.arctan2(Afs_est,Afc_est)) # in degrees (already corrected for rotation) - NB: not debiased
 	frac_est=np.sqrt((Afs_est**2.+Afc_est**2.)*wCorrection)/A_est # BIASED sqrt(<H^2>)/A
 	HexPow2_est=(Afs_est**2.+Afc_est**2.)*wCorrection-bias # estimated hexadecapolar power - debiased + corrected for <W^4>
 	

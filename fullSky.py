@@ -4,7 +4,7 @@ a=BICEP()
 
 def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWHM=a.FWHM,\
 	noise_power=a.noise_power,delensing_fraction=a.delensing_fraction,\
-	freq=a.freq,maxDec=85.):
+	freq=a.freq,maxDec=85.,folder='DebiasedBatchDataFull'):
 	"""This reconstructs the full data from the multiprocessed full sky runs. 
 	This is optimized for the full sky, due to indexing.
 	
@@ -22,20 +22,33 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	decs=[full_decs[i] for i in range(len(full_decs)) if goodMap[i]!=False]
 	
 	index = 0 # for counting
+	jndex=0
 	import os
 	
 	A,eps,eps_err,eps_mean,angle,angle_err,H2,H2_mean,H2_err=[],[],[],[],[],[],[],[],[]
-	
+	ras_all,decs_all=[],[]
 	# Now iterate over files
 	while True:
 		if index%1000==0:
 			print index
-		fileName=root_dir+'DebiasedBatchDataFull/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
+		if jndex>5000:
+			break
+		fileName=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
     		if not os.path.exists(fileName):
-        		print 'no more dat at %s' %index
-        		break
+        		print 'no dat at %s' %index
+        		#print fileName
+        		jndex+=1
+        		index+=1
+        		#print 'location %s' %fileName
+        		continue
         	# Read in data
         	data=np.load(fileName)
+        	if data.all()==1:
+        		print 'edge data'
+        		index+=1
+        		continue
+        	ras_all.append(ras[index])
+        	decs_all.append(decs[index])
 		A.append(data[0][0])
 		eps.append(data[5][0])
 		eps_err.append(data[5][2])
@@ -46,7 +59,8 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 		H2_mean.append(data[9][1])
 		H2_err.append(data[9][2])
 		index+=1
-		
+	ras=ras_all
+	decs=decs_all	
 	# Remove any extras
 	print len(A),len(ras)
 	ras=ras[:len(A)]
