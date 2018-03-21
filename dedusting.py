@@ -23,6 +23,9 @@ if __name__=='__main__':
 	else:
 		t='I'
 	outDir=a.root_dir+'Dedusting%s/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(t,a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	import os
+	if not os.path.exists(outDir):
+		os.makedirs(outDir)
 	
 	if a.remakeErrors:
 		if os.path.exists(outDir+'%s.npy' %batch_id):
@@ -81,10 +84,10 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
 
     # First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
     from hades.PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
-    fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
+    fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=a.flipU)
 
     # Also compute unpadded map to give binning values without bias
-    unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
+    unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False,flipU=a.flipU)
     unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 
     fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
@@ -123,6 +126,7 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
     Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
     Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+    Umap.data*=-1.
     QUmap=Qmap.copy()
     QUmap.data=np.sqrt(Qmap.data**2.+Umap.data**2.)
     if useQU:

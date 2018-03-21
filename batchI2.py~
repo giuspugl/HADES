@@ -31,17 +31,25 @@ if __name__=='__main__':
      # Display progress bar with tqdm
      r = list(tqdm.tqdm(p.imap(I_strength,file_ids),total=len(file_ids)))
      
-     np.save(a.root_dir+'%sdeg%s/meanI2.npy' %(a.map_size,a.sep),np.array(r))
+     Idat=[rd[0] for rd in r]
+     QUdat=[rd[1] for rd in r]
      
-def I_strength(map_id,map_size=a.map_size,sep=a.sep):
+     np.save(a.root_dir+'%sdeg%s/meanI2.npy' %(a.map_size,a.sep),np.array(Idat))
+     np.save(a.root_dir+'%sdeg%s/meanQU.npy' %(a.map_size,a.sep),np.array(QUdat))
+     
+def I_strength(map_id,map_size=a.map_size,sep=a.sep,root_dir=a.root_dir):
 	""" Function to compute <I^2> for a map patch, from the cut-out T maps (unsmoothed)."""
 	
-	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
 	# Load maps
 	Imap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+	Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
+	Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+	
 	
 	# Calculate power
 	meanI2 = np.mean(Imap.data.ravel()**2.)
+	meanQU = np.mean(Qmap.data.ravel()**2.+Umap.data.ravel()**2.)
 	
-	return meanI2
+	return [meanI2,meanQU]

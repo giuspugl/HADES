@@ -37,10 +37,10 @@ if __name__=='__main__':
      np.save(a.root_dir+'%sdeg%s/meanI2.npy' %(a.map_size,a.sep),np.array(Idat))
      np.save(a.root_dir+'%sdeg%s/meanQU.npy' %(a.map_size,a.sep),np.array(QUdat))
      
-def I_strength(map_id,map_size=a.map_size,sep=a.sep):
+def I_strength(map_id,map_size=a.map_size,sep=a.sep,root_dir=a.root_dir):
 	""" Function to compute <I^2> for a map patch, from the cut-out T maps (unsmoothed)."""
 	
-	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
 	# Load maps
 	Imap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')

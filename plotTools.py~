@@ -218,6 +218,7 @@ def hexadecapole_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 			logH2Pow[i]=np.log10(data[9][0])
 		else:
 			logH2Pow[i]=-100.#logH2Pow[i-1] # avoid errors
+		logH2Pow[i]=np.log10(np.abs(data[9][0]))
 		if A[i]>0:
 			logA[i]=np.log10(A[i])
 		else:
@@ -259,7 +260,7 @@ def hexadecapole_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 	## Now compute the whole patch maps
 	# Dataset:
 	dat_set=[A,fs,fc,Afs,Afc,frac,ang,A_err,Af_err,f_err,frac_err,ang_err,probA,probP,logA,H2Pow,H2PowErr,logH2Pow,H2PowSig]
-	names=[r'Monopole amplitude',r'$f_s$',r'$f_c$',r'$Af_s$',r'$Af_c$',r'Anisotropy Fraction, $\epsilon$',r'Anisotropy Angle, $\alpha$',r'MC error for $A$',r'MC error for $Af$',r'MC error for $f$',r'MC error for anisotropy fraction',r'MC error for angle',r'$\mathcal{H}^2$ Isotropic Percentile, $\rho$, (Analytic)',r'$\mathcal{H}^2$ Isotropic Percentile, $\rho$, (Statistical)',r'$\log_{10}(A)$',r'$\mathcal{H}^2$',r'$\mathcal{H}^2$ Error',r'$\log_{10}\mathcal{H}^2$','r$\mathcal{H}^2$ quasi-significance']
+	names=[r'Monopole amplitude',r'$f_s$',r'$f_c$',r'$Af_s$',r'$Af_c$',r'Anisotropy Fraction, $\epsilon$',r'Anisotropy Angle, $\alpha$',r'MC error for $A$',r'MC error for $Af$',r'MC error for $f$',r'MC error for anisotropy fraction',r'MC error for angle',r'$\mathcal{H}^2$ Isotropic Percentile, $p$, (Analytic)',r'$\mathcal{H}^2$ Isotropic Percentile, $p$, (Statistical)',r'$\log_{10}(A)$',r'$\mathcal{H}^2$',r'$\mathcal{H}^2$ Error',r'$\log_{10}\mathcal{H}^2$','r$\mathcal{H}^2$ quasi-significance']
 	file_str=['A','fs','fc','Afs','Afc','epsilon','angle','A_err','Af_err','f_err',\
 	'epsilon_err','ang_err','prob_analyt','prob_stat','logA','Hex2Pow','Hex2PowErr','logHex2Pow','Hex2PowSig']
 	
@@ -299,6 +300,9 @@ def hexadecapole_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 			minMax=[min(cut_dat),max(cut_dat)]
 		if file_str[j]=='logA':
 			vmin,vmax=np.percentile(dat_set[j],[0,95])
+		if file_str[j]=='Hex2PowSig':
+			vmin,vmax=np.percentile(dat_set[j],[0,95])
+			minMax=[vmin,vmax]
 		from hades.plotTools import skyMap
 		# Create plot
 		skyMap(dat_set[j],ra,dec,cbar_label=names[j],cmap=cmap,minMax=minMax,\

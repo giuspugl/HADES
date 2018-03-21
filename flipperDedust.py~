@@ -5,7 +5,7 @@ from flipper import *
 import liteMapNickHand,healpy
 
 if True:
-	healpixMapT,healpixMapQ,healpixMapU = healpy.fitsfunc.read_map('CleanWidePatch/DedustingMaps/r%s.fits' %type,field=(0,1,2),h=False)
+	healpixMapT,healpixMapQ,healpixMapU = healpy.fitsfunc.read_map('CleanWidePatch/DedustingMaps/%s.fits' %type,field=(0,1,2),h=False)
 
 	Ra0,dec0,Ra1,dec1=300.,-70.,340.,-45.#270.,-70.,350.,-46.
 	m = liteMap.makeEmptyCEATemplateAdvanced(Ra0,dec0,Ra1,dec1)

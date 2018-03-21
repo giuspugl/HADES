@@ -23,6 +23,10 @@ if __name__=='__main__':
 	import os
 	index=int(sys.argv[1])
 	
+	if index<200:
+		if index!=29:
+			sys.exit()
+	
 	# First load in parameters
 	from hades.NoiseParams import create_params
 	LEN=create_params()
@@ -38,17 +42,19 @@ if __name__=='__main__':
 	delensing_fraction=paramFile['delensing_fraction'][index]
 	length=len(paramFile['FWHM']) # total number of processes
 	paramFile.close()
-	outDir=a.root_dir+'DebiasedNoiseParamsBatch_d%s/' %delensing_fraction
+	outDir=a.root_dir+'ZeroDebiasedNoiseParamsBatch_d%s/' %delensing_fraction
 			
-	
+	#print 'started'
 	# Compute all maps with these parameters
 	for mi,map_id in enumerate(all_map_id):
+		#if map_id!=671 and map_id!=359:
+		#	continue
 		if os.path.exists(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power)):
-			#os.remove(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power))
-			print 'already exists; continuing'
+			#if index==29:
+			#	os.remove(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power))
+			pass
+			#print 'already exists; continuing'
 		else:
-			#pass
-		#if True:
 			# Now compute the estimators:
 			from hades.fast_wrapper import padded_wrap
 			output=padded_wrap(map_id,FWHM=FWHM,noise_power=noise_power,delensing_fraction=delensing_fraction)
@@ -66,6 +72,7 @@ if __name__=='__main__':
 			np.savez(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power),\
 				H2=H2_est,H2_MC=H2_MC,ang=ang_est,A=A_est)
 			print 'Map %s of %s complete in %s seconds' %(mi+1,len(all_map_id),time.time()-start_time)
+			del H2_est,H2_MC,ang_est,A_est,A_MC,output
 			
 	print 'Job %s of %s complete in %s seconds' %(index+1,length,time.time()-start_time)
 	
@@ -73,7 +80,34 @@ if __name__=='__main__':
 	if index==LEN-1:
 		from hades.NoiseParams import sendMail
 		sendMail('Noise Parameter Space')
+		
+	sys.exit()
+
+def check_files(map_size=a.map_size,sep=a.sep,freq=a.freq):
+	import os
+	paramFile=np.load(a.root_dir+'%sdeg%sBatchNoiseParams.npz' %(map_size,sep))
 	
+	for mi,map_id in enumerate(paramFile['map_id']):
+		print 'Checking tile %s of %s' %(mi+1,len(paramFile['map_id']))
+			
+		for index in range(len(paramFile['FWHM'])):
+			delensing_fraction=paramFile['delensing_fraction'][index]
+			noise_power=paramFile['noise_power'][index]
+			FWHM=paramFile['FWHM'][index]
+			inDir=a.root_dir+'DebiasedNoiseParamsBatch_d%s/' %delensing_fraction
+			
+			# Load in data file
+			path=inDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power)
+			if not os.path.exists(path): # if file not found
+				print map_id,FWHM,noise_power,index
+				continue
+			#print map_id,FWHM,noise_power
+			#try: dat=np.load(path)
+			#except OSError:
+			#	print map_id,FWHM,noise_power,index
+			#	continue
+			
+		
 	
 def reconstruct_hexadecapole(map_size=a.map_size,sep=a.sep,freq=a.freq):#,delensing_fraction=a.delensing_fraction):
 	import os

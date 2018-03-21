@@ -182,6 +182,8 @@ for mask_index in range(len(all_masks)):
         plt.errorbar(X,Y,yerr=E,fmt='x')
         plt.xlabel(r'$l$')
         plt.xlim([0,150])
+        if infile=='ang':
+        	plt.ylim([0,115])
         plt.ylabel(texNames[i])
         #plt.title(r'%s Power Spectrum using GAL%s Mask' %(fullNames[i],GAL),fontsize=14)
         plt.savefig(outDir+infile+'GAL%s.png' %GAL,bbox_inches='tight')

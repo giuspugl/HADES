@@ -119,7 +119,7 @@ def MakePaddedPower(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     Output: B-mode map in power-space   
     """
     import flipperPol as fp
-    
+    raise Exception('Need to add flipU code')
     inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
@@ -246,7 +246,7 @@ def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.pa
    		return fourier_noise
    	
 	
-def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMasks=False):
+def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMasks=False,flipU=a.flipU,root_dir=a.root_dir):
     """ Function to create 2D B-mode power map from real space map padded with zeros.
     Input: map_id (tile number)
     map_size (in degrees)
@@ -261,12 +261,14 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     """
     import flipperPol as fp
     
-    inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+    inDir=root_dir+'%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
     Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
     Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+    if flipU:
+    	Umap.data*=-1.
     maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
     
     # Compute zero-padded maps (including mask map)
@@ -290,7 +292,7 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     del zTmap,zQmap,zUmap,modL,angL
     
     # Rescale to correct amplitude using dust SED
-    if not a.root_dir== '/data/ohep2/rTest/':
+    if a.rescale_freq:
     	from .PowerMap import dust_emission_ratio
     	dust_intensity_ratio=dust_emission_ratio(freq)
     

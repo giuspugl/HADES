@@ -19,6 +19,7 @@ if True:
 	print('Q done')
 	mapsU = mapsT.copy()
 	mapsU.loadDataFromHealpixMap(healpixMapU)
+	mapsU.data*=-1.
 	print('U done')
 
 	mapsT.writeFits('CleanWidePatch/DedustingMaps/rT_%sCut.fits' %type,overWrite=True)

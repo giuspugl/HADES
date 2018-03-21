@@ -7,7 +7,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
-	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded):
+	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU,root_dir=a.root_dir):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -43,18 +43,18 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
 	
 	if not unPadded:
-		fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
-		# Also compute unpadded map to give binning values without bias
-		unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
+		fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU,root_dir=root_dir)
+		# Also compute unpadded map to give binning values without 
+		unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
 		fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 		unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 		padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 		unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
 	
 	else:
-		unpadded_fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=True)
+		unpadded_fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU,root_dir=root_dir)
 		unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
-		fBdust=unpadded_fBdust # only use unpadded map here
+		fBdust=unpadded_fBdust.copy() # only use unpadded map here
 		padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 		unpadded_window=padded_window.copy()
 	
@@ -75,7 +75,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	wCorrection = np.mean(padded_window.data**2.)**2./np.mean(padded_window.data**4.)
 	
 	# Input directory:
-	inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
 	# First compute the total noise (instrument+lensing+tensors)
 	from .NoisePower import noise_model,lensed_Cl,r_Cl
@@ -182,8 +182,8 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	if useBias:
 		bias_data=np.zeros(N_bias)
 		for n in range(N_bias):
-			if n%100==0:
-				print 'Computing bias sim %s of %s' %(n+1,N_bias)
+			#if n%100==0:
+			#	print 'Computing bias sim %s of %s' %(n+1,N_bias)
 			fBias=fast_padded_fill_from_Cell(padded_window.copy(),spline,precomp,unPadded=unPadded,lMin=lMin,lMax=lMax)#,padding_ratio=padding_ratio)
 			bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
 			bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
@@ -210,8 +210,8 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	#MC_map=totPow.copy() # template for SIM-SIM data
 	
 	for n in range(N_sims): # for each MC map
-		if n%100==0:
-			print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
+		#if n%100==0:
+		#	print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
 		# Create the map with a random implementation of Cell
 		fourier_MC_map=fast_padded_fill_from_Cell(padded_window.copy(),spline,precomp,unPadded=unPadded,lMin=lMin,lMax=lMax)
 		MC_map=fftTools.powerFromFFT(fourier_MC_map.copy()) # create power domain map
@@ -219,7 +219,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		# Now use the estimators on the MC sims
 		output=derotated_estimator(MC_map.copy(),map_id,lMin=lMin,lMax=lMax,\
 			slope=slope,factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
-			rot=rot, delensing_fraction=delensing_fraction,useTensors=a.useTensors,\
+			rot=rot, delensing_fraction=delensing_fraction,useTensors=useTensors,\
 			debiasAmplitude=True,rot_average=rot_average,OtherClMap=OtherClMap) 
 		
 		# Compute MC anisotropy parameters  
@@ -237,7 +237,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	else:
 		isoBias=0.
 	del output
-	print 'MC sims complete'	
+	#print 'MC sims complete'	
 	del precomp
 	del fourier_MC_map,MC_map,totFmap,unpadded_totFmap,totPow,unpadded_totPow,padded_window,unpadded_window,OtherClMap # delete unneeded variables
 	

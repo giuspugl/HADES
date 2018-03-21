@@ -22,6 +22,7 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	decs=[full_decs[i] for i in range(len(full_decs)) if goodMap[i]!=False]
 	
 	index = 0 # for counting
+	jndex=0
 	import os
 	
 	A,eps,eps_err,eps_mean,angle,angle_err,H2,H2_mean,H2_err=[],[],[],[],[],[],[],[],[]
@@ -30,10 +31,13 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	while True:
 		if index%1000==0:
 			print index
+		if jndex>5000:
+			break
 		fileName=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,index)
     		if not os.path.exists(fileName):
         		print 'no dat at %s' %index
         		#print fileName
+        		jndex+=1
         		index+=1
         		#print 'location %s' %fileName
         		continue

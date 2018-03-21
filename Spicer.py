@@ -14,6 +14,9 @@ else:
     root_dir='/data/ohep2/FFP8FullSky/'
 outDir=root_dir+dirName+'/'
 outDirGood=root_dir+'GoodSpectra/'
+import os
+if not os.path.exists(outDirGood):
+	os.makedirs(outDirGood)
 
 maxDec=85. # 85.
 sep=1

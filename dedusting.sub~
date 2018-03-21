@@ -1,9 +1,10 @@
-# batch_maps.sub -- run map creation for each patch
+# dedusting.sub -- run map creation for each patch
 
 universe		= vanilla
 executable              = /data/ohep2/hades/dedusting.sh
 getenv			= true
 arguments               = "$(Process)"
+requirements		= (machine != "calx098.ast.cam.ac.uk")&&(machine != "calx087.ast.cam.ac.uk")
 should_transfer_files   = IF_NEEDED
 when_to_transfer_output = ON_EXIT
 request_memory		= 2000
@@ -11,4 +12,4 @@ log                     = /dev/null
 output			= dedusting.out
 error			= dedusting.error
 notification		= never
-queue 10000
+queue 500#10000

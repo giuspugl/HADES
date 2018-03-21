@@ -1,0 +1,131 @@
+import numpy as np
+import os
+from hades.params import BICEP
+a=BICEP()
+map_size=a.map_size
+sep=a.sep
+
+if __name__=='__main__':
+	import os
+	""" Create a 2D array of hexadecapole for noise parameter data."""
+	# First load in all iterated parameters
+	paramFile=np.load(a.root_dir+'%sdeg%sBatchNoiseParams.npz' %(map_size,sep))
+	
+	# Initialise output array
+	H2_num=np.zeros([len(a.noi_par_NoisePower),len(a.noi_par_FWHM),len(a.noi_par_delensing)]) # numerator
+	norm=np.zeros_like(H2_num) # normalisation
+	fwhm_arr=np.zeros_like(H2_num) # array of FWHM for plotting
+	power_arr=np.zeros_like(H2_num) # noise power values
+	delensing_arr=np.zeros_like(H2_num)
+	
+	# For MC values:
+	H2_MC_num=np.zeros([len(a.noi_par_NoisePower),len(a.noi_par_FWHM),len(a.noi_par_delensing),a.N_sims])
+	norm_MC=np.zeros_like(H2_MC_num)	
+	
+	#errFiles=[] # runs with errors
+	
+	# Iterate over parameter number:
+	def opener(mi):
+		#print 'Reconstructing tile %s of %s' %(mi+1,len(paramFile['map_id']))
+		map_id=paramFile['map_id'][mi]	
+		all_H2,all_H2_MC,all_H2_MC_err=[],[],[]
+		allErr=[]
+		for index in range(len(paramFile['FWHM'])):
+			delensing_fraction=paramFile['delensing_fraction'][index]
+			noise_power=paramFile['noise_power'][index]
+			FWHM=paramFile['FWHM'][index]
+			inDir=a.root_dir+'DebiasedNoiseParamsBatch_d%s/' %delensing_fraction
+			
+			# Load in data file
+			path=inDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power)
+			if not os.path.exists(path): # if file not found
+				#print 'no file at id %s' %map_id
+				errTag=True
+				allErr.append(errTag)
+				all_H2.append(0)
+				all_H2_MC.append(0)
+				all_H2_MC_err.append(0)
+		
+				continue
+			#print map_id,FWHM,noise_power
+			try:
+				dat=np.load(path)
+			except IOError:
+				print 'file error at id %s' %map_id
+				continue
+			H2=dat['H2']
+			H2_MC=dat['H2_MC']
+			H2_err=np.std(H2_MC)
+		
+			if len(np.array(H2_MC))!=a.N_sims:
+				print 'dodgy dat at index %s' %index
+				errTag=True # to catch errors from dodgy data
+				H2_MC=np.zeros(a.N_sims)
+				#errFiles.append(index)
+			else:
+				errTag=False
+			dat.close()
+			allErr.append(errTag)
+			all_H2.append(H2)
+			all_H2_MC.append(H2_MC)
+			all_H2_MC_err.append(H2_err)
+		
+		return all_H2,all_H2_MC,all_H2_MC_err,allErr
+	
+	
+	# run multiprocessing		
+	import multiprocessing as mp
+	p=mp.Pool()
+	import tqdm
+	outs=tqdm.tqdm(p.imap(opener,range(len(paramFile['map_id']))),total=len(paramFile['map_id']))
+	
+		
+	H2_arr=[o[0] for o in outs]
+	H2_MC_arr=[o[1] for o in outs]
+	H2_err_arr=[o[2] for o in outs]
+	allErr_arr=[o[3] for o in outs]
+	
+	print allErr_arr
+			
+	for index in range(len(paramFile['FWHM'])):
+	# Find relevant position in array
+		delensing_fraction=paramFile['delensing_fraction'][index]
+		noise_power=paramFile['noise_power'][index]
+		FWHM=paramFile['FWHM'][index]
+			
+		noi_pow_index=np.where(a.noi_par_NoisePower==noise_power)[0][0]
+		fwhm_index=np.where(a.noi_par_FWHM==FWHM)[0][0]
+		delens_index=np.where(a.noi_par_delensing==delensing_fraction)[0][0]
+		
+		power_arr[noi_pow_index,fwhm_index,delens_index]=noise_power
+		fwhm_arr[noi_pow_index,fwhm_index,delens_index]=FWHM
+		delensing_arr[noi_pow_index,fwhm_index,delens_index]=delensing_fraction
+	
+		for k in range(len(H2_arr)):	
+			# Construct mean epsilon
+			SNR=1.#/eps_err*2.
+			H2_num[noi_pow_index,fwhm_index]+=SNR*H2_arr[k][index]
+			print k
+			if not allErr_arr[k][index]:
+				for j in range(len(H2_MC_arr[k][index])):
+					H2_MC_num[noi_pow_index][fwhm_index][delens_index][j]+=SNR*H2_MC_arr[k][index][j]
+					norm_MC[noi_pow_index][fwhm_index][delens_index][j]+=SNR
+			norm[noi_pow_index,fwhm_index,delens_index]+=SNR
+			del noi_pow_index,fwhm_index,delens_index,SNR#,H2,H2_MC,H2_err
+	
+	paramFile.close()
+	import pickle
+	pickle.dump([H2_MC_num,norm_MC,norm,H2_num,fwhm_arr,power_arr,delensing_arr],open('pcklall.pkl','w'))
+	
+	# Now compute normalised mean epsilon
+	patch_H2=H2_num/norm
+	patch_H2_MC=H2_MC_num/norm_MC
+	
+	# Compute number of significance of detection
+	sig=(patch_H2-np.mean(patch_H2_MC,axis=3))/np.std(patch_H2_MC,axis=3)
+	
+	# Save output
+	#np.save(a.root_dir+'ErrorFiles.npz',errFiles)
+	
+	np.savez(a.root_dir+'MultiPatchHex2NoiseParams.npz',H2=patch_H2,H2_MC=patch_H2_MC,sig=sig,FWHM=fwhm_arr,noise_power=power_arr,delensing_fraction=delensing_arr)
+

@@ -10,16 +10,21 @@ class BICEP:
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
-	sep = 3 # Separation of map centres
+	sep = 3# Separation of map centres
+	flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	
 	N_sims = 500 # Number of MC sims
 	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
-	padding_ratio=2. # padded map width / original map width 
-	unPadded=False # do not apply any zero-padding if true
+	padding_ratio=1. # padded map width / original map width 
+	unPadded=True # do not apply any zero-padding if true
 	
-	useQU=True # use root(Q^2+U^2) maps for dedusting - else use I maps
+	useQU=False # use root(Q^2+U^2) maps for dedusting - else use I maps
 	rTest = False # replace data with r= 0.1 spectrum
+	
+	rescale_freq = True # rescale to correct frequency - turn OFF for rTests etc.
+	
+	log_noise = True # use log scaling for noise - only for large noise levels
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
@@ -54,9 +59,11 @@ class BICEP:
 	elif root_dir=='/data/ohep2/Simons/':
 		FWHM=1.8
 		noise_power=5.
+		delensing_fraction=0.4
 	else:
 		FWHM = 1.5 # full width half maximum of beam in arcmin
-		noise_power = 1.# noise power of BICEP -> in microK-arcmin
+		noise_power = 1.# noise power of S4 -> in microK-arcmin
+		delensing_fraction=0.1
 	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
@@ -73,7 +80,7 @@ class BICEP:
 	noi_par_delensing=[0.1,1.0]
 	
 	# Null testing parameters
-	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#
+	f_dust_all = np.arange(1,-0.2,-0.2)#list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#[1e-10,1.0]#
 	err_repeats = 1#0 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
@@ -86,7 +93,7 @@ class BICEP:
 	exactCen = True#True # for computing centre of one-D bins
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
-	send_email=False # send email on completion
+	send_email=True # send email on completion
 	repeat=1#50#200 # repeat application of noise + estimation to see errors
 	
 	# Rotation angles for KK map rotation (to avoid pixellation errors)

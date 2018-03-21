@@ -43,17 +43,17 @@ if __name__=='__main__':
 
 		
 	# Now run the estimation
-	if False: 
-		from hades.fast_wrapper import padded_wrap
-		output=padded_wrap(map_id)
+	#if False: 
+	#	from hades.fast_wrapper import padded_wrap
+	#	output=padded_wrap(map_id)
 	if True:
 		from hades.padded_debiased_wrap import padded_wrap
 		output=padded_wrap(map_id)
-	else:
-		from hades.debiased_wrapper import tile_wrap
-		output=tile_wrap(map_id)
+	#else:
+	#	from hades.debiased_wrapper import tile_wrap
+	#	output=tile_wrap(map_id)
 	
-	print output	
+	#print output	
 	# Save output to file
 	if not os.path.exists(outDir): # make directory
 		os.makedirs(outDir)
@@ -73,7 +73,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
-	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded):
+	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -95,6 +95,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	rot_average (Boolean, whether to correct for pixellation error by performing (corrected) map rotations)
 	useBias (Boolean, whether to use bias)
 	padding_ratio (ratio of padded to unpadded map width >=1)
+	flipU (Boolean, whether to flip sign of U-map if in Planck COSMO convention)
 	
 	Output: First 6 values: [estimate,isotropic mean, isotropic stdev] for {A,Afs,Afc,fs,fc,str,ang}
 	7th: full data for N_sims as a sequence of 7 lists for each estimate (each of length N_sims)
@@ -107,14 +108,14 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
-	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
+	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU)
 	
-	if np.sum(unpadded_window.data.ravel())==0.:
-		print 'no data here'
-		return 1 # no data in this pixel
+	#if np.sum(unpadded_window.data.ravel())==0.:
+	#	print 'no data here'
+	#	return 1 # no data in this pixel
 			
 	# Also compute unpadded map to give binning values without bias
-	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
+	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU)
 	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
@@ -217,6 +218,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	# Compute 1D power spectrum by binning in annuli
 	from .PowerMap import oneD_binning
 	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),l_step,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope]) 
+	#l_cen,mean_pow=oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope])
 	# gives central binning l and mean power in annulus using window function corrections 
 	
 	# Create spline fit

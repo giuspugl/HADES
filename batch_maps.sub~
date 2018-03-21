@@ -2,6 +2,7 @@
 
 universe		= vanilla
 executable              = /data/ohep2/hades/batch_maps.sh
+requirements		= (machine != "calx098.ast.cam.ac.uk")&&(machine != "calx087.ast.cam.ac.uk")
 getenv			= true
 arguments               = "$(Process)"
 should_transfer_files   = IF_NEEDED

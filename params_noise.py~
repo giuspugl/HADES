@@ -10,14 +10,14 @@ class BICEP:
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
-	sep = 3# Separation of map centres
+	sep = 3 # Separation of map centres
 	flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	
 	N_sims = 500 # Number of MC sims
 	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
-	padding_ratio=2. # padded map width / original map width 
-	unPadded=False # do not apply any zero-padding if true
+	padding_ratio=1. # padded map width / original map width 
+	unPadded=True # do not apply any zero-padding if true
 	
 	useQU=False # use root(Q^2+U^2) maps for dedusting - else use I maps
 	rTest = False # replace data with r= 0.1 spectrum
@@ -51,8 +51,8 @@ class BICEP:
 	if root_dir=='/data/ohep2/liteBIRD/':
 		FWHM=30.
 		noise_power=3.
-		lMax=1000
-		lMin=120.
+		#lMax=1000
+		#lMin=120.
 		padding_ratio=1.
 		unPadded=True
 		delensing_fraction=0.5
@@ -80,7 +80,7 @@ class BICEP:
 	noi_par_delensing=[0.1,1.0]
 	
 	# Null testing parameters
-	f_dust_all = np.arange(1,-0.2,-0.2)#list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#[1e-10,1.0]#
+	f_dust_all = list(np.arange(1.,-0.05,-0.05))#[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#[1e-10,1.0]#
 	err_repeats = 1#0 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS

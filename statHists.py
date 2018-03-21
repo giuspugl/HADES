@@ -30,10 +30,10 @@ if __name__=='__main__':
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from hades.PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
-	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True)
+	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=a.flipU)
 	
 	# Also compute unpadded map to give binning values without bias
-	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False)
+	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False,flipU=a.flipU)
 	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
 	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
@@ -140,7 +140,7 @@ if __name__=='__main__':
 	import multiprocessing as mp
 	import tqdm
 	p=mp.Pool()
-	N=int(100000)
+	N=int(500000)
 	#from hades.statHists import run_MC
 	out=list(tqdm.tqdm(p.imap_unordered(run_MC,range(N)),total=N))
 	A=[o[0] for o in out]
@@ -150,7 +150,7 @@ if __name__=='__main__':
 	h2=[o[4] for o in out]
 	wCorrection=[o[5] for o in out]
 
-	np.savez('/data/ohep2/CleanWidePatch/StatData3.npz',A=A,Afs=Afs,ang=ang,H2=h2,Afc=Afc,wCorrection=wCorrection)
+	np.savez('/data/ohep2/CleanWidePatch/StatData5.npz',A=A,Afs=Afs,ang=ang,H2=h2,Afc=Afc,wCorrection=wCorrection)
 	print 'Process complete'
 	
 
