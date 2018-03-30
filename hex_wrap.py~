@@ -765,8 +765,9 @@ def hex_fullsky_stats(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.no
 	print 'Plotting complete'
 
 
-def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,
-	freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims,suffix='',folder=None,root_dir=a.root_dir,I2SNR=a.I2SNR,returnAll=False,plot=True):
+def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,\
+			freq=a.freq,delensing_fraction=a.delensing_fraction,N_sims=a.N_sims,suffix='',folder=None,\
+			root_dir=a.root_dir,I2SNR=a.I2SNR,returnAll=False,plot=True,monopole=False):
 	"""Compute the global hexadecapole anisotropy over the patch, summing the epsilon values weighted by the S/N.
 	The estimate is assumed Gaussian by Central Limit Theorem.
 	Errors are obtained by computing estimate for many MC sims
@@ -794,6 +795,8 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 		QUdata=np.load(QUdir)
 	
 	# Initialize variables
+	Asum,trueAsum=0.,0.
+	count=0
 	hex2_patch_num=0.
 	A_patch_num=0. # for mean amplitude shift
 	norm=0. # normalisation
@@ -822,6 +825,9 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 		hex2_mean=data[9][1]
 		hex2_eps=data[9][2]
 		trueA=data[10]
+		Asum+=A_est
+		trueAsum+=trueA
+		count+=1
 		if returnAll:
 			h2_est.append(hex2_est)
 			h2_mean.append(hex2_mean)
@@ -846,6 +852,9 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 	A_patch=A_patch_num/norm
 	A_patch_MC=A_patch_MC_num/norm
 	
+	# Compute monopole mean
+	trueA=trueAsum/count
+	A=Asum/count
 	# Compute mean and standard deviation
 	MC_mean=np.mean(hex2_patch_MC)
 	MC_std=np.std(hex2_patch_MC)
@@ -881,5 +890,9 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 	if returnAll:
 		return np.mean(h2_mean),np.mean(h2_eps),np.mean(h2_est),sigmas,sigmasA,np.mean(bias_data)
 	else:
-		print sigmas,sigmasA
-		return sigmas,sigmasA
+		if monopole:
+			print sigmas,sigmasA,A,trueA
+			return sigmas,sigmasA,A,trueA
+		else:
+			print sigmas,sigmasA
+			return sigmas,sigmasA

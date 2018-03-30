@@ -12,4 +12,4 @@ log                     = /dev/null
 output			= batch_maps.out
 error			= batch_maps.error
 notification		= never
-queue 250#10000
+queue 4000

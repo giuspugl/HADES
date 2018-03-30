@@ -3,6 +3,7 @@
 universe		= vanilla
 executable              = /data/ohep2/hades/null_test.sh
 requirements		= (machine != "calx098.ast.cam.ac.uk")&&(machine != "calx087.ast.cam.ac.uk")
+priority 		= 12
 getenv			= true
 arguments               = "$(Process)"
 should_transfer_files   = IF_NEEDED
@@ -12,4 +13,4 @@ log                     = /dev/null
 output			= null_test.out
 error			= null_test.error
 notification		= never
-queue 18000#5500
+queue 5300

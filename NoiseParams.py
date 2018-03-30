@@ -23,10 +23,6 @@ if __name__=='__main__':
 	import os
 	index=int(sys.argv[1])
 	
-	if index<200:
-		if index!=29:
-			sys.exit()
-	
 	# First load in parameters
 	from hades.NoiseParams import create_params
 	LEN=create_params()
@@ -42,13 +38,11 @@ if __name__=='__main__':
 	delensing_fraction=paramFile['delensing_fraction'][index]
 	length=len(paramFile['FWHM']) # total number of processes
 	paramFile.close()
-	outDir=a.root_dir+'ZeroDebiasedNoiseParamsBatch_d%s/' %delensing_fraction
+	outDir=a.root_dir+'DustDebiasedNoiseParamsBatch_d%s/' %delensing_fraction
 			
 	#print 'started'
 	# Compute all maps with these parameters
 	for mi,map_id in enumerate(all_map_id):
-		#if map_id!=671 and map_id!=359:
-		#	continue
 		if os.path.exists(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power)):
 			#if index==29:
 			#	os.remove(outDir+'id%s_fwhm%s_power%s.npz' %(map_id,FWHM,noise_power))

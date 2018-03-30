@@ -6,6 +6,7 @@ arguments               = "$(Process)"
 requirements		= (machine != "calx098.ast.cam.ac.uk")&&(machine != "calx087.ast.cam.ac.uk")
 get_env			= true
 should_transfer_files   = IF_NEEDED
+priority		= 8
 when_to_transfer_output = ON_EXIT
 request_memory		= 5000
 log                     = /dev/null

@@ -4,7 +4,7 @@ a=BICEP()
 
 def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
     slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,\
-    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None):
+    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None,KKdebiasH2=a.KKdebiasH2):
     """Use modified KK14 estimators to compute polarisation hexadecapole amplitude and angle via Afs,Afc parameters.
     This uses the noise model in hades.NoisePower.noise_model.
     A is computed recursively, since the S/N ratio depends on it (weakly).
@@ -25,7 +25,7 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     Outputs:
     A,fs,fc, Afs, Afc from estimators. NB these are corrected for map rotation.
     """
-    
+    snp=2.
 	    
     # Compute relevant pixels and mod-l maps
     goodPix=np.where((map.modLMap.ravel()>lMin)&(map.modLMap.ravel()<lMax)) # pixels in correct range
@@ -65,8 +65,8 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
             SNMap = (Afactor*fiducialClMap)/(Afactor*fiducialClMap+OtherClMap) # SN ratio
 
             # Compute estimate for A
-            Anum=np.sum(debiasedPowerMap*(SNMap**2.)/fiducialClMap)
-            Aden=np.sum(SNMap**2.)
+            Anum=np.sum(debiasedPowerMap*(SNMap**snp)/fiducialClMap)
+            Aden=np.sum(SNMap**snp)
 
             # Now record output
             lastFactor=Afactor
@@ -87,8 +87,8 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     # Now compute A,Afs,Afc (recompute A s.t. all best estimators use same SNR)
     SNmap=(finalFactor*fiducialClMap)/(finalFactor*fiducialClMap+OtherClMap) # signal-to-noise ratio
     # Now compute estimate for A
-    Anum=np.sum(debiasedPowerMap*(SNmap**2.)/fiducialClMap) # noise-debiased
-    Aden=np.sum(SNmap**2.)
+    Anum=np.sum(debiasedPowerMap*(SNmap**snp)/fiducialClMap) # noise-debiased
+    Aden=np.sum(SNmap**snp)
     A=Anum/Aden
     
     if rot_average:
@@ -98,7 +98,11 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     Afs,Afc,fs,fc=[np.zeros_like(all_rot) for _ in range(4)]
     angGood=map.thetaMap.ravel()[goodPix]*np.pi/180.
     angOnes=np.ones_like(angGood)*np.pi/180.
-    tempMap=PowerMap*(SNmap**2.)/fiducialClMap
+    if KKdebiasH2:
+    	PM=debiasedPowerMap.copy()
+    else:
+    	PM=PowerMap.copy()
+    tempMap=PM*(SNmap**snp)/fiducialClMap
     from .KKdebiased import rotation_corrector
     for r,rot in enumerate(all_rot):
     	angMap=angGood+rot*angOnes # angle in radians
@@ -106,9 +110,9 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
 	sinMap=np.sin(4.*angMap)
 	# Now estimate Afs, Afc
 	Afcnum=np.sum(tempMap*cosMap) # cosine coeff - NOT using debiased maps else introduces bias
-	Afcden=np.sum((SNmap*cosMap)**2.)
+	Afcden=np.sum((SNmap**snp)*(cosMap**2.))
 	Afsnum=np.sum(tempMap*sinMap) # sine coeff 
-	Afsden=np.sum((SNmap*sinMap)**2.)
+	Afsden=np.sum((SNmap**snp)*(sinMap**2.))
 	Afc_est=Afcnum/Afcden
 	Afs_est=Afsnum/Afsden
 	# Now correct for map rotation:

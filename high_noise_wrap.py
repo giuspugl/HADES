@@ -18,7 +18,7 @@ if __name__=='__main__':
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
 	
-	outDir=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	outDir=a.root_dir+'HiNoiseBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if a.remakeErrors:
 		if os.path.exists(outDir+'%s.npy' %batch_id):
@@ -47,8 +47,8 @@ if __name__=='__main__':
 	#	from hades.fast_wrapper import padded_wrap
 	#	output=padded_wrap(map_id)
 	if True:
-		from hades.padded_debiased_wrap import padded_wrap
-		output=padded_wrap(map_id)
+		from hades.high_noise_wrap import noisy_wrap
+		output=noisy_wrap(map_id)
 	#else:
 	#	from hades.debiased_wrapper import tile_wrap
 	#	output=tile_wrap(map_id)
@@ -65,16 +65,15 @@ if __name__=='__main__':
 	if batch_id==len(goodIDs)-2:
 		if a.send_email:
 			from hades.NoiseParams import sendMail
-			sendMail('Debiased Padded Single Map')
+			sendMail('High-noise Padded Single Map')
 
 
 
-def padded_wrap(map_id,map_size=a.map_size,\
+def noisy_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
-	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU,root_dir=a.root_dir,\
-	KKdebiasH2=a.KKdebiasH2,cutFactor=1.35):
+	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU,root_dir=a.root_dir):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -106,18 +105,14 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	10: true monopole (from noiseless simulation) - for testing
 	11th: bias (isotropic estimate of <H^2>)
 	"""
-	lCut=int(cutFactor*lMax) # maximum ell for Fourier space maps
+	lCut=int(1.35*lMax) # maximum ell for Fourier space maps
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
 	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU,root_dir=root_dir)
 	
-	#if np.sum(unpadded_window.data.ravel())==0.:
-	#	print 'no data here'
-	#	return 1 # no data in this pixel
-			
 	# Also compute unpadded map to give binning values without bias
-	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
+	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
 	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
@@ -160,9 +155,13 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	from .RandomField import fill_from_model
 	#fourierNoise=fourier_noise_map
-	
-	from .PaddedPower import fourier_noise_test
-	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
+
+	# NEW TEST
+	from .RandomField import noise_test2
+	fourierNoise=noise_test2(padded_window,ellNoise,total_Cl_noise(ellNoise),map_size=map_size,N_conv=3)
+	unpadded_noise=noise_test2(unpadded_window,ellNoise,total_Cl_noise(ellNoise),map_size=map_size,N_conv=3)
+	#from .PaddedPower import fourier_noise_test
+	#fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
 	#unpadded_noise=unpadded_fBdust.copy() # this map is generated completely in Fourier space to avoid errors
 	#unpadded_noise.kMap=fill_from_model(unpadded_fBdust.copy(),total_Cl_noise,fourier=True,power=False)
 	#fourierNoise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
@@ -198,7 +197,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
 	p=derotated_estimator(Bpow.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,factor=None,FWHM=0.,\
-			noise_power=1.e-400,rot=rot,delensing_fraction=0.,useTensors=False,debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False)
+			noise_power=1.e-400,rot=rot,delensing_fraction=0.,useTensors=False,debiasAmplitude=False,rot_average=rot_average)
 	trueA=p[0]
 	del Bpow		
 	
@@ -212,18 +211,18 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	# Compute anisotropy parameters
 	A_est,fs_est,fc_est,Afs_est,Afc_est,finalFactor=derotated_estimator(totPow.copy(),map_id,lMin=lMin,\
 		lMax=lMax,slope=slope,factor=None,FWHM=FWHM,noise_power=noise_power,rot=rot,\
-		delensing_fraction=delensing_fraction,useTensors=useTensors,debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2)
+		delensing_fraction=delensing_fraction,useTensors=useTensors,debiasAmplitude=True,rot_average=rot_average)
 	# (Factor is expected monopole amplitude (to speed convergence))
 	
 	## Run MC Simulations	
 	
 	# Compute 1D power spectrum by binning in annuli
-	from .PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),lMin*padding_ratio,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,\
+	from .PowerMap import oneD_binning # using padded map here...
+	l_cen,mean_pow = oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,\
 					C_ell_model=analytic_model,params=[A_est,slope]) 
 	#l_cen,mean_pow=oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope])
 	# gives central binning l and mean power in annulus using window function corrections 
-	
+	print 'noisynoise'
 	# Create spline fit
 	from scipy.interpolate import UnivariateSpline
 	spl=UnivariateSpline(l_cen,np.log(mean_pow),k=5)
@@ -249,18 +248,19 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		for n in range(N_bias):
 			if n%100==0:
 				print 'Computing bias sim %s of %s' %(n+1,N_bias)
-			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
+			fBias=noise_test2(padded_window.copy(),l_cen,mean_pow,map_size=map_size,N_conv=3)
+			#padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
 			bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
 			bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
 			# First compute estimators on cross-spectrum
 			cross_ests=derotated_estimator(bias_cross.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
-							debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False) # NB: CHANGE DEBIAS_AMPLITUDE parameter here
+							debiasAmplitude=True,rot_average=rot_average)
 			self_ests=derotated_estimator(bias_self.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
-							debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2)
+							debiasAmplitude=True,rot_average=rot_average)
 			bias_data[n]=(-1.*(self_ests[3]**4.+self_ests[4]**2.)+4.*(cross_ests[3]**2.+cross_ests[4]**2.))*wCorrection
 		# Now compute the mean bias - this debiases the DATA only
 		bias=np.mean(bias_data)
@@ -278,14 +278,15 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		if n%100==0:
 			print('MapID %s: Starting simulation %s of %s' %(map_id,n+1,N_sims))
 		# Create the map with a random implementation of Cell
-		fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)
+		fourier_MC_map=noise_test2(padded_window.copy(),l_cen,mean_pow,map_size=map_size,N_conv=3)
+		#fourier_MC_map=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)
 		MC_map=fftTools.powerFromFFT(fourier_MC_map.copy()) # create power domain map
 		
 		# Now use the estimators on the MC sims
 		output=derotated_estimator(MC_map.copy(),map_id,lMin=lMin,lMax=lMax,\
 			slope=slope,factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 			rot=rot, delensing_fraction=delensing_fraction,useTensors=useTensors,\
-			debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2) 
+			debiasAmplitude=True,rot_average=rot_average) 
 		
 		# Compute MC anisotropy parameters  
 		A_MC[n]=output[0]

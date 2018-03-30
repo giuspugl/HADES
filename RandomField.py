@@ -230,6 +230,32 @@ def fast_padded_fill_from_Cell(padded_mask,spline,precomp=None,lMin=a.lMin,lMax=
    	return fourier_real
 	
 
+def noise_test2(padMask,ell,Cell,map_size=a.map_size,N_conv=3):
+	""" New test for high noise levels. This creates a fourier map directly in Fourier space.
+	N_conv is number of pixels to interpolate with."""
+	from .RandomField import real_fill_from_Cell
+	_,kMap=real_fill_from_Cell(padMask.copy(),ell,Cell,bufferFactor=1,lMin=min(ell),log=True,fourier=True)
+	template=fftTools.fftFromLiteMap(padMask.copy()) #template map
+	template.kMap=kMap
+	from scipy.signal import convolve2d
+	
+	def twoDsinc(lx,ly,a_deg=map_size):
+    		a=a_deg*np.pi/180. # in radians
+    		return np.sinc(lx*a/(2.*np.pi))*np.sinc(ly*a/(2.*np.pi))#*a**2.#*(a*180./np.pi)**2.#*np.pi
+	# Create interpolation grid
+	pix=template.modLMap[0,1] # pixel separation
+	lArr=np.arange(-N_conv*pix+pix,N_conv*pix,pix)
+	LX,LY=np.meshgrid(lArr,lArr)
+	SINC=twoDsinc(LX,LY)
+
+	# Convolve maps	
+	CONV=convolve2d(kMap,SINC,mode='same')
+	template.kMap=CONV
+	
+	# Now rescale:
+	template.kMap/=np.sqrt(np.sum(SINC))
+	template.kMap*=(2.)**(0.25)
+	return template
 
 def padded_fill_from_Cell(padded_mask,ell,Cell,lMin=a.lMin,unPadded=False,precomp=None):
 	""" Function to fill + pad a fourier map with a Gaussian random field implementation of an input Cell_BB spectrum.

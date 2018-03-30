@@ -161,7 +161,7 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
 			kk[idgood]=np.exp(spl(ll[idgood]))
 		else:
 			kk[idgood]=spl(ll[idgood])
-		kk[idhi]=Cell[-1]#min(kk[idgood]) # set unwanted values to small value
+		kk[idhi]=min(kk[idgood]) #Cell[-1] # set unwanted values to small value
 		kk[idlo]=Cell[0]
 		
 	        area = Nx*Ny*self.pixScaleX*self.pixScaleY

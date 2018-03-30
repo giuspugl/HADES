@@ -49,9 +49,14 @@ if __name__=='__main__':
 	
 	
 	# Now run the estimation
-	from hades.padded_debiased_wrap import padded_wrap
-	def runner(map_id):
-		return padded_wrap(map_id,f_dust=f_dust)
+	if a.root_dir=='/data/ohep2/liteBIRD/':
+		from hades.high_noise_wrap import noisy_wrap
+		def runner(map_id):
+			return noisy_wrap(map_id,f_dust=f_dust)
+	else:
+		from hades.padded_debiased_wrap import padded_wrap
+		def runner(map_id):
+			return padded_wrap(map_id,f_dust=f_dust)
 	
 	# Save output to file
 	if not os.path.exists(outDir): # make directory
@@ -75,20 +80,28 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	if folder==None:
 		folder='NullTestBatchData'
 	from hades.hex_wrap import patch_hexadecapole
-	mean,err=[np.zeros(len(a.f_dust_all)) for _ in range(2)]
+	mean,err,monopole,true_monopole=[np.zeros(len(a.f_dust_all)) for _ in range(4)]
 	for i in range(len(a.f_dust_all)):
+		trueA=[]
+		A=[]
 		sigs=[]
 		for j in range(a.err_repeats):
 			suffix='_'+str(i)+'_'+str(j)
 			outs=patch_hexadecapole(suffix=suffix,map_size=map_size,sep=sep,FWHM=FWHM,noise_power=noise_power,\
-				delensing_fraction=delensing_fraction,freq=freq,folder=folder,plot=False)
+				delensing_fraction=delensing_fraction,freq=freq,folder=folder,plot=False,monopole=True)
 			sigs.append(outs[0])
+			trueA.append(outs[3])
+			A.append(outs[2])
 		mean[i]=np.mean(sigs)
+		monopole[i]=np.mean(A)
+		true_monopole[i]=np.mean(trueA)
+		
 		if a.err_repeats!=1:
 			err[i]=np.std(sigs)
-			print 'f_dust: %s mean: %s std: %s' %(a.f_dust_all[i],mean[i],err[i])
+			print 'f_dust: %s %a.f_dust_all[i]' #mean: %s std: %s' %(a.f_dust_all[i],mean[i],err[i])
 		else:
-			print 'f_dust: %s mean: %s' %(a.f_dust_all[i],mean[i])
+			#print 'f_dust: %s mean: %s' %(a.f_dust_all[i],mean[i])
+			pass
 	 
 	# Now plot
 	import matplotlib.pyplot as plt
@@ -100,14 +113,14 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 	plt.rc('text', usetex=True)
 	plt.rc('font', family='serif')
 	plt.xlabel(r'$f_\mathrm{dust}$')
-	plt.xscale('log')
+	#plt.xscale('log')
 	plt.ylabel(r'Detection Significance')
 	plt.title(r'Null Test Significances')
 	outDir=root_dir+'NullTests/'
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)
-	np.savez(outDir+'Data_f%s_ms%s_s%s_fw%s_np%s_d%s' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),f_dust=a.f_dust_all,mean=mean,err=err)
+	np.savez(outDir+'Data_f%s_ms%s_s%s_fw%s_np%s_d%s' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),f_dust=a.f_dust_all,mean=mean,err=err,A=monopole,trueA=true_monopole)
 	plt.savefig(outDir+'NullTestPaddedPlot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
 	plt.close()
 	

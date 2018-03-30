@@ -6,11 +6,12 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/FFP8/'#'/data/ohep2/{Simons/,sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/BICEP2/'#'/data/ohep2/{Simons/,sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
 	sep = 3# Separation of map centres
+	flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	
 	N_sims = 500 # Number of MC sims
 	N_bias = 500 # no. sims used for bias computation
@@ -34,7 +35,7 @@ class BICEP:
 	else:
 		lMin=180.*3./map_size*1./padding_ratio #240.*3./map_size*1./padding_ratio
 	lMax = 2000. # ranges to fit spectrum over 
-	f_dust=1.
+	f_dust=0.001
 
 	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
@@ -57,28 +58,24 @@ class BICEP:
 		l_step=60.
 		padding_ratio=2.
 		unPadded=False#True
-		delensing_fraction=0.5 
+		delensing_fraction=0.5
+		# Fiducial C_l 
 		slope=2.42 # C_l^f power law slope (from Planck X.X.X. paper)
-		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	elif root_dir=='/data/ohep2/Simons/':
 		FWHM=1.8
 		noise_power=5.
 		delensing_fraction=0.4
 		slope=2.42
-		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	elif root_dir=='/data/ohep2/FFP8/':
 		FWHM=1.5
 		noise_power=1.
 		delensing_fraction=0.1
 		slope=2.42
-		flipU=False # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	else:
 		FWHM = 1.5 # full width half maximum of beam in arcmin
 		noise_power = 1.# noise power of S4 -> in microK-arcmin
 		delensing_fraction=0.1
 		slope=2.42
-		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
-	
 	# Lensing
 	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
