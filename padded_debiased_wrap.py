@@ -106,7 +106,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	10: true monopole (from noiseless simulation) - for testing
 	11th: bias (isotropic estimate of <H^2>)
 	"""
-	lCut=int(cutFactor*lMax) # maximum ell for Fourier space maps
+	lCut=1000#int(cutFactor*lMax) # maximum ell for Fourier space maps
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier

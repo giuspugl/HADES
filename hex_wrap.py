@@ -810,7 +810,10 @@ def patch_hexadecapole(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 		else:
 			ij=i # for compatibility
 		if folder==None:
-			folder='PaddedBatchData'
+			if a.true_lensing:
+				folder='LensedPaddedBatchData'
+			else:
+				folder='PaddedBatchData'
 		datPath=root_dir+folder+'/f%s_ms%s_s%s_fw%s_np%s_d%s/%s%s.npy' %(freq,map_size,sep,FWHM,noise_power,delensing_fraction,ij,suffix)
 		if root_dir=='/data/ohep2/liteBIRD/':
 			if not os.path.exists(datPath):

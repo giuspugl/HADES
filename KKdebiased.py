@@ -4,7 +4,7 @@ a=BICEP()
 
 def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
     slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,\
-    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None,KKdebiasH2=a.KKdebiasH2):
+    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None,KKdebiasH2=a.KKdebiasH2,true_lensing=False):
     """Use modified KK14 estimators to compute polarisation hexadecapole amplitude and angle via Afs,Afc parameters.
     This uses the noise model in hades.NoisePower.noise_model.
     A is computed recursively, since the S/N ratio depends on it (weakly).
@@ -21,6 +21,7 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     debiasAmplitude -> Boolean whether to subtract noise+lensing C_l for estimation of A - this is ONLY for A
     rot_average -> Whether to average over rotations to correct for pixellation (NB: this does not change mean(Afs))
     correct -> TESTING - whether to correct for angle rotation (default = True)
+    true_lensing -> if true use FFP10 lensing map B-mode spectrum rather than default CAMB spectrum
     
     Outputs:
     A,fs,fc, Afs, Afc from estimators. NB these are corrected for map rotation.
@@ -38,7 +39,11 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
     	#Define total noise
 	def Cl_total_noise_func(l):
 		"""This is total C_l noise from lensing, B-modes and experimental noise"""
-	        Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
+	        if true_lensing:
+	        	from .lens_power import ffp10_lensing
+	        	Cl_lens_func=ffp10_lensing(delensing_fraction=delensing_fraction)
+	        else:
+	        	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction)
 	        if useTensors:
 	            Cl_r_func=r_Cl()
 	            return Cl_lens_func(l)+Cl_r_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)

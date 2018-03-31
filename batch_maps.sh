@@ -19,4 +19,4 @@ export PATH=$PATH:$HADES_DIR/bin
 export PYTHONPATH=$PYTHONPATH:$HADES_DIR/python
 
 # run code
-python -u /data/ohep2/hades/padded_debiased_wrap.py $1
+python -u /data/ohep2/hades/full_lens_wrap.py $1

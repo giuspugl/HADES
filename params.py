@@ -6,7 +6,7 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/FFP8/'#'/data/ohep2/{Simons/,sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{Simons/,sims/,BICEP2/,WidePatch/,FFP8/,FullSky/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
@@ -23,9 +23,12 @@ class BICEP:
 	
 	rescale_freq = True # rescale to correct frequency - turn OFF for rTests etc.
 	
-	KKdebiasH2 = False # subtract expected noise spectrum for Afs, Afc in estimators
+	KKdebiasH2 = True # subtract expected noise spectrum for Afs, Afc in estimators
 	
 	log_noise = False # use log scaling for noise - only for large noise levels
+	
+	true_lensing = False # use FFP10 lensing spectrum rather than CAMB one
+	camb_spectrum = True # rescale FFP10 to CAMB 1D power spectrum for compatibility
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
@@ -71,12 +74,13 @@ class BICEP:
 		noise_power=1.
 		delensing_fraction=0.1
 		slope=2.42
-		flipU=False # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
+		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	else:
 		FWHM = 1.5 # full width half maximum of beam in arcmin
 		noise_power = 1.# noise power of S4 -> in microK-arcmin
 		delensing_fraction=0.1
 		slope=2.42
+		lMax=500
 		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	
 	# Lensing
@@ -92,7 +96,7 @@ class BICEP:
 	
 	# Null testing parameters
 	f_dust_all = list(np.arange(1.0,-0.05,-0.05))#np.arange(1,-0.2,-0.2)##[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#[1e-10,1.0]#
-	err_repeats = 10#0 # repeat for uncertainties
+	err_repeats = 1#0 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
 	hexTest = False#True # test methods using fake isotropic map

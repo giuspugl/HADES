@@ -17,7 +17,12 @@ if __name__=='__main__':
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
 	
-	outDir=a.root_dir+'NullTestBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	if a.true_lensing:
+		lens_str='Lensed'
+	else:
+		lens_str=''
+	
+	outDir=a.root_dir+'NullTest'+lens_str+'BatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if all_id<110: # create first time
 		from hades.batch_maps import create_good_map_ids
@@ -50,13 +55,18 @@ if __name__=='__main__':
 	
 	# Now run the estimation
 	if a.root_dir=='/data/ohep2/liteBIRD/':
-		from hades.high_noise_wrap import noisy_wrap
-		def runner(map_id):
-			return noisy_wrap(map_id,f_dust=f_dust)
+		if a.true_lensing:
+			raise Exception('High-noise + real lensing not yet implemented')
+		else:
+			from hades.high_noise_wrap import noisy_wrap
+			def runner(map_id): return noisy_wrap(map_id,f_dust=f_dust)
 	else:
-		from hades.padded_debiased_wrap import padded_wrap
-		def runner(map_id):
-			return padded_wrap(map_id,f_dust=f_dust)
+		if a.true_lensing:
+			from hades.full_lens_wrap import lensed_wrap
+			def runner(map_id): return lensed_wrap(map_id,f_dust=f_dust)
+		else:
+			from hades.padded_debiased_wrap import padded_wrap
+			def runner(map_id): return padded_wrap(map_id,f_dust=f_dust)
 	
 	# Save output to file
 	if not os.path.exists(outDir): # make directory
@@ -75,10 +85,13 @@ if __name__=='__main__':
 			sendMail('Single Map Null Test')
 			
 def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,delensing_fraction=a.delensing_fraction,freq=a.freq,root_dir=a.root_dir,\
-		folder=None):
+		folder=None,plot=False):
 	""" Recreate + plot significances from parameters."""
 	if folder==None:
-		folder='NullTestBatchData'
+		if a.true_lensing:
+			folder='NullTestLensedBatchData'
+		else:
+			folder='NullTestBatchData'
 	from hades.hex_wrap import patch_hexadecapole
 	mean,err,monopole,true_monopole=[np.zeros(len(a.f_dust_all)) for _ in range(4)]
 	for i in range(len(a.f_dust_all)):
@@ -103,26 +116,31 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 			print 'f_dust: %s' %a.f_dust_all[i]# mean: %s' %(a.f_dust_all[i],mean[i])
 			pass
 	 
-	# Now plot
-	import matplotlib.pyplot as plt
-	plt.figure()
-	if a.err_repeats!=1:
-		plt.errorbar(a.f_dust_all,mean,yerr=err,fmt='x')
-	else:	
-		plt.errorbar(a.f_dust_all,mean,fmt='x')
-	plt.rc('text', usetex=True)
-	plt.rc('font', family='serif')
-	plt.xlabel(r'$f_\mathrm{dust}$')
-	#plt.xscale('log')
-	plt.ylabel(r'Detection Significance')
-	plt.title(r'Null Test Significances')
-	outDir=root_dir+'NullTests/'
+	if plot:
+		# Now plot
+		import matplotlib.pyplot as plt
+		plt.figure()
+		if a.err_repeats!=1:
+			plt.errorbar(a.f_dust_all,mean,yerr=err,fmt='x')
+		else:	
+			plt.errorbar(a.f_dust_all,mean,fmt='x')
+		plt.rc('text', usetex=True)
+		plt.rc('font', family='serif')
+		plt.xlabel(r'$f_\mathrm{dust}$')
+		#plt.xscale('log')
+		plt.ylabel(r'Detection Significance')
+		plt.title(r'Null Test Significances')
+		plt.savefig(outDir+'NullTestPaddedPlot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
+		plt.close()
+	
+	if a.true_lensing:
+		outDir=root_dir+'NullTestsLensed/'
+	else:
+		outDir=root_dir+'NullTests/'
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)
 	np.savez(outDir+'Data_f%s_ms%s_s%s_fw%s_np%s_d%s' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),f_dust=a.f_dust_all,mean=mean,err=err,A=monopole,trueA=true_monopole)
-	plt.savefig(outDir+'NullTestPaddedPlot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
-	plt.close()
 	
 	print 'Plotting complete'
 		

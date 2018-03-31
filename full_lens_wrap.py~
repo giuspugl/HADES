@@ -18,7 +18,10 @@ if __name__=='__main__':
 	# First load good IDs:
 	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
 	
-	outDir=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	if a.true_lensing:
+		outDir=a.root_dir+'LensedPaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	else:
+		outDir=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if a.remakeErrors:
 		if os.path.exists(outDir+'%s.npy' %batch_id):
@@ -46,12 +49,12 @@ if __name__=='__main__':
 	#if False: 
 	#	from hades.fast_wrapper import padded_wrap
 	#	output=padded_wrap(map_id)
-	if True:
+	if a.true_lensing:
+		from hades.full_lens_wrap import lensed_wrap
+		output=lensed_wrap(map_id)
+	else:
 		from hades.padded_debiased_wrap import padded_wrap
 		output=padded_wrap(map_id)
-	#else:
-	#	from hades.debiased_wrapper import tile_wrap
-	#	output=tile_wrap(map_id)
 	
 	#print output	
 	# Save output to file
@@ -65,11 +68,11 @@ if __name__=='__main__':
 	if batch_id==len(goodIDs)-2:
 		if a.send_email:
 			from hades.NoiseParams import sendMail
-			sendMail('Debiased Padded Single Map')
+			sendMail('Debiased Lensed Single Map')
 
 
 
-def padded_wrap(map_id,map_size=a.map_size,\
+def lensed_wrap(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
@@ -111,10 +114,6 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
 	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
 	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU,root_dir=root_dir)
-	
-	#if np.sum(unpadded_window.data.ravel())==0.:
-	#	print 'no data here'
-	#	return 1 # no data in this pixel
 			
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
@@ -142,17 +141,28 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	# Input directory:
 	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
+	# Compute fourier space lensing map:
+	from .lens_power import MakeFourierLens
+	fourier_lens=MakeFourierLens(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,\
+			fourier=True,power=False,flipU=True,delensing_fraction=delensing_fraction,\
+			lMax=lCut,l_step=l_step)
+ 	unpadded_lens=MakeFourierLens(map_id,padding_ratio=1.,map_size=map_size,sep=sep,\
+ 			fourier=True,power=False,flipU=True,delensing_fraction=delensing_fraction,\
+ 			lMax=lCut,l_step=l_step*padding_ratio)
+	fourier_lens=DegradeFourier(fourier_lens,lCut) # discard high-ell pixels
+	unpadded_lens=DegradeFourier(unpadded_lens,lCut) # discard high-ell pixels
+	
+	
 	# First compute the total noise (instrument+lensing+tensors)
-	from .NoisePower import noise_model,lensed_Cl,r_Cl
-	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction) # function for lensed Cl
+	from .NoisePower import noise_model,r_Cl
 	
 	if useTensors: # include r = 0.1 estimate
 		Cl_r_func=r_Cl()
 		def total_Cl_noise(l):
-			return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)+Cl_r_func(l)
+			return noise_model(l,FWHM=FWHM,noise_power=noise_power)+Cl_r_func(l)
 	else:
-		def total_Cl_noise(l):
-			return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
+		def total_Cl_noise(l): # this DOESN'T include lensing here
+			return noise_model(l,FWHM=FWHM,noise_power=noise_power)
 	
 	# Now create a fourier space noise map	
 	from .PaddedPower import fourier_noise_map
@@ -163,6 +173,10 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	from .PaddedPower import fourier_noise_test
 	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
+	
+	from .lens_power import ffp10_lensing
+	Cl_lens_func=ffp10_lensing(delensing_fraction=delensing_fraction) # function for lensed Cl
+	
 	#unpadded_noise=unpadded_fBdust.copy() # this map is generated completely in Fourier space to avoid errors
 	#unpadded_noise.kMap=fill_from_model(unpadded_fBdust.copy(),total_Cl_noise,fourier=True,power=False)
 	#fourierNoise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
@@ -172,11 +186,11 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	#return fourierNoise,unpadded_noise
 	
-	# Compute total map
+	# Compute total map from DUST + NOISE + LENSING
 	totFmap=fBdust.copy()
-	totFmap.kMap+=fourierNoise.kMap# for total B modes
+	totFmap.kMap+=fourierNoise.kMap+fourier_lens.kMap # for total B modes
 	unpadded_totFmap=unpadded_fBdust.copy()
-	unpadded_totFmap.kMap+=unpadded_noise.kMap
+	unpadded_totFmap.kMap+=unpadded_noise.kMap+unpadded_lens.kMap
 	
 	
 	# Now convert to power-space
@@ -185,34 +199,35 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	unpadded_totPow=fftTools.powerFromFFT(unpadded_totFmap)
 	
 	
-	del fourierNoise,unpadded_noise
+	del fourierNoise,unpadded_noise,fourier_lens,unpadded_lens
 	
 	if unPadded: # only use unpadded maps here
 		totFmap=unpadded_totFmap
 		totPow=unpadded_totPow
 		padded_window=unpadded_window
-			
-			
-	#return totPow,Bpow
-		
+				
 	# Compute true amplitude using ONLY dust map
 	from .KKdebiased import derotated_estimator
 	p=derotated_estimator(Bpow.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,factor=None,FWHM=0.,\
-			noise_power=1.e-400,rot=rot,delensing_fraction=0.,useTensors=False,debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False)
+			noise_power=1.e-400,rot=rot,delensing_fraction=0.,useTensors=False,debiasAmplitude=False,\
+			rot_average=rot_average,KKdebiasH2=False,true_lensing=True)
 	trueA=p[0]
 	del Bpow		
+	
+	return totPow,trueA
 	
 	# Compute rough semi-analytic C_ell spectrum
 	def analytic_model(ell,A_est,slope):
 		"""Use the estimate for A to construct analytic model.
 		NB: This is just used for finding the centres of the actual binned data.
 		"""
-		return total_Cl_noise(ell)+A_est*ell**(-slope)
+		return total_Cl_noise(ell)+Cl_lens_func(ell)+A_est*ell**(-slope)
 	
 	# Compute anisotropy parameters
 	A_est,fs_est,fc_est,Afs_est,Afc_est,finalFactor=derotated_estimator(totPow.copy(),map_id,lMin=lMin,\
 		lMax=lMax,slope=slope,factor=None,FWHM=FWHM,noise_power=noise_power,rot=rot,\
-		delensing_fraction=delensing_fraction,useTensors=useTensors,debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2)
+		delensing_fraction=delensing_fraction,useTensors=useTensors,debiasAmplitude=True,\
+		rot_average=rot_average,KKdebiasH2=KKdebiasH2,true_lensing=True)
 	# (Factor is expected monopole amplitude (to speed convergence))
 	
 	## Run MC Simulations	
@@ -256,11 +271,11 @@ def padded_wrap(map_id,map_size=a.map_size,\
 			cross_ests=derotated_estimator(bias_cross.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
-							debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False) # NB: CHANGE DEBIAS_AMPLITUDE parameter here
+							debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False,true_lensing=True)
 			self_ests=derotated_estimator(bias_self.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
-							debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2)
+							debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2,true_lensing=True)
 			bias_data[n]=(-1.*(self_ests[3]**4.+self_ests[4]**2.)+4.*(cross_ests[3]**2.+cross_ests[4]**2.))*wCorrection
 		# Now compute the mean bias - this debiases the DATA only
 		bias=np.mean(bias_data)
@@ -285,7 +300,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		output=derotated_estimator(MC_map.copy(),map_id,lMin=lMin,lMax=lMax,\
 			slope=slope,factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 			rot=rot, delensing_fraction=delensing_fraction,useTensors=useTensors,\
-			debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2) 
+			debiasAmplitude=True,rot_average=rot_average,KKdebiasH2=KKdebiasH2,true_lensing=True) 
 		
 		# Compute MC anisotropy parameters  
 		A_MC[n]=output[0]
@@ -344,5 +359,4 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Return all output
 	return Adat,fsdat,fcdat,Afsdat,Afcdat,fracdat,angdat,allMC,[],HexPow2dat,trueA,bias,wCorrection,isoBias # (empty set to avoid reordering later code)
-
 
