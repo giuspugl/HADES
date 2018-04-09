@@ -16,17 +16,17 @@ if __name__=='__main__':
 	batch_id=int(sys.argv[1]) # batch_id number
 	
 	# First load good IDs:
-	goodFile=a.root_dir+'%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
+	goodFile=a.root_dir+'Dust/%sdeg%sGoodIDs.npy' %(a.map_size,a.sep)
 	
-	outDir=a.root_dir+'PaddedBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
+	outDir=a.root_dir+'HealpyBatchData/f%s_ms%s_s%s_fw%s_np%s_d%s/' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction)
 	
 	if a.remakeErrors:
 		if os.path.exists(outDir+'%s.npy' %batch_id):
 			print 'output exists; exiting'
 			sys.exit()
 	
-	if batch_id<110: # create first time
-		from hades.batch_maps import create_good_map_ids
+	if batch_id<150: # create first time
+		from hades.healpy_tools import create_good_map_ids
 		create_good_map_ids()
 		print 'creating good IDs'
 		
@@ -47,8 +47,8 @@ if __name__=='__main__':
 	#	from hades.fast_wrapper import padded_wrap
 	#	output=padded_wrap(map_id)
 	if True:
-		from hades.padded_debiased_wrap import padded_wrap
-		output=padded_wrap(map_id)
+		from hades.healpy_wrap import wrapper
+		output=wrapper(map_id)
 	#else:
 	#	from hades.debiased_wrapper import tile_wrap
 	#	output=tile_wrap(map_id)
@@ -65,11 +65,11 @@ if __name__=='__main__':
 	if batch_id==len(goodIDs)-2:
 		if a.send_email:
 			from hades.NoiseParams import sendMail
-			sendMail('Debiased Padded Single Map')
+			sendMail('Healpy Single Map')
 
 
 
-def padded_wrap(map_id,map_size=a.map_size,\
+def wrapper(map_id,map_size=a.map_size,\
 	sep=a.sep,N_sims=a.N_sims,N_bias=a.N_bias,noise_power=a.noise_power,FWHM=a.FWHM,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
@@ -77,6 +77,8 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	KKdebiasH2=a.KKdebiasH2,cutFactor=1.35):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
+	
+	This uses cutouts from input dust + lensing + noise map. (Pre-corrected for frequency dependence)
 	
 	Input: map_id (tile number)
 	map_size (tile width in degrees)
@@ -108,39 +110,19 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	"""
 	lCut=int(cutFactor*lMax) # maximum ell for Fourier space maps
 	
-	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
-	from .PaddedPower import MakePowerAndFourierMaps,DegradeMap,DegradeFourier
-	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=True,flipU=flipU,root_dir=root_dir)
-	
-	#if np.sum(unpadded_window.data.ravel())==0.:
-	#	print 'no data here'
-	#	return 1 # no data in this pixel
-			
-	# Also compute unpadded map to give binning values without bias
-	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
+	from .healpy_tools import create_map
+	from .PaddedPower import DegradeFourier,DegradeMap
+	fBdust,padded_window,unpadded_window=create_map(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,fourier=True,power=False,\
+		returnMasks=True,FWHM=FWHM,noise_power=noise_power,delensing_fraction=delensing_fraction,f_dust=f_dust)
+	unpadded_fBdust=create_map(map_id,padding_ratio=1.,map_size=map_size,sep=sep,fourier=True,power=False,\
+		returnMasks=False,FWHM=FWHM,noise_power=noise_power,delensing_fraction=delensing_fraction,f_dust=f_dust)
 	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
 	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
 	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
 	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
 	
-	if a.hexTest:
-		# TESTING - replace fourier B-mode from dust with random isotropic realisation of self
-		powDust=fftTools.powerFromFFT(fBdust) # compute power
-		from .PowerMap import oneD_binning
-		ll,pp=oneD_binning(powDust.copy(),10,lCut,l_step,binErr=False,exactCen=False) # compute one-D binned spectrum
-		from .PaddedPower import fourier_noise_test
-		fBdust,unpadded_fBdust=fourier_noise_test(padded_window,unpadded_window,ll,pp,padding_ratio=padding_ratio,unpadded=False,log=True)
-		#fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False) # generate Gaussian realisation
-	#return powDust,fBdust,unpadded_fBdust
-	# Reduce dust amplitude by 'dedusting fraction'
-	unpadded_fBdust.kMap*=f_dust
-	fBdust.kMap*=f_dust
-	
 	# Compute <W^2>^2 / <W^4> - this is a necessary correction for the H^2 quantities (since 4-field quantities)
 	wCorrection = np.mean(padded_window.data**2.)**2./np.mean(padded_window.data**4.)
-	
-	# Input directory:
-	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
 	# First compute the total noise (instrument+lensing+tensors)
 	from .NoisePower import noise_model,lensed_Cl,r_Cl
@@ -155,52 +137,19 @@ def padded_wrap(map_id,map_size=a.map_size,\
 			return Cl_lens_func(l)+noise_model(l,FWHM=FWHM,noise_power=noise_power)
 	
 	# Now create a fourier space noise map	
-	from .PaddedPower import fourier_noise_map
-	ellNoise=np.arange(5,lCut) # ell range for noise spectrum
-	
-	from .RandomField import fill_from_model
-	#fourierNoise=fourier_noise_map
-	
 	from .PaddedPower import fourier_noise_test
-	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
-	#unpadded_noise=unpadded_fBdust.copy() # this map is generated completely in Fourier space to avoid errors
-	#unpadded_noise.kMap=fill_from_model(unpadded_fBdust.copy(),total_Cl_noise,fourier=True,power=False)
-	#fourierNoise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
-	#fourierNoise,unpadded_noise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=True)
-	#return fourierNoise,unpadded_noise#,unpadded_noise2
-	#return fftTools.powerFromFFT(fourierNoise)
-	
-	#return fourierNoise,unpadded_noise
-	
-	# Compute total map
-	totFmap=fBdust.copy()
-	totFmap.kMap+=fourierNoise.kMap# for total B modes
+	totFmap=fBdust.copy()	
 	unpadded_totFmap=unpadded_fBdust.copy()
-	unpadded_totFmap.kMap+=unpadded_noise.kMap
-	
-	
 	# Now convert to power-space
 	totPow=fftTools.powerFromFFT(totFmap) # total power map
-	Bpow=fftTools.powerFromFFT(fBdust) # dust only map
 	unpadded_totPow=fftTools.powerFromFFT(unpadded_totFmap)
-	
-	
-	del fourierNoise,unpadded_noise
 	
 	if unPadded: # only use unpadded maps here
 		totFmap=unpadded_totFmap
 		totPow=unpadded_totPow
 		padded_window=unpadded_window
 			
-			
-	#return totPow,Bpow
-		
-	# Compute true amplitude using ONLY dust map
-	from .KKdebiased import derotated_estimator
-	p=derotated_estimator(Bpow.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,factor=None,FWHM=0.,\
-			noise_power=1.e-400,rot=rot,delensing_fraction=0.,useTensors=False,debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False)
-	trueA=p[0]
-	del Bpow		
+	trueA=0
 	
 	# Compute rough semi-analytic C_ell spectrum
 	def analytic_model(ell,A_est,slope):
@@ -208,6 +157,8 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		NB: This is just used for finding the centres of the actual binned data.
 		"""
 		return total_Cl_noise(ell)+A_est*ell**(-slope)
+	
+	from .KKdebiased import derotated_estimator
 	
 	# Compute anisotropy parameters
 	A_est,fs_est,fc_est,Afs_est,Afc_est,finalFactor=derotated_estimator(totPow.copy(),map_id,lMin=lMin,\
@@ -249,14 +200,14 @@ def padded_wrap(map_id,map_size=a.map_size,\
 		for n in range(N_bias):
 			if n%100==0:
 				print 'Computing bias sim %s of %s' %(n+1,N_bias)
-			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
+			fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=unPadded,precomp=precomp)
 			bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
 			bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
 			# First compute estimators on cross-spectrum
 			cross_ests=derotated_estimator(bias_cross.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
-							debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False) # NB: CHANGE DEBIAS_AMPLITUDE parameter here
+							debiasAmplitude=False,rot_average=rot_average,KKdebiasH2=False) 
 			self_ests=derotated_estimator(bias_self.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
 							factor=finalFactor,FWHM=FWHM,noise_power=noise_power,\
 							rot=rot,delensing_fraction=delensing_fraction,useTensors=useTensors,\
