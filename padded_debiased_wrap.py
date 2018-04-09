@@ -74,7 +74,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
 	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU,root_dir=a.root_dir,\
-	KKdebiasH2=a.KKdebiasH2,cutFactor=1.35):
+	KKdebiasH2=a.KKdebiasH2,cutFactor=1.35,ffp10_spectrum=a.ffp10_spectrum):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -144,7 +144,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# First compute the total noise (instrument+lensing+tensors)
 	from .NoisePower import noise_model,lensed_Cl,r_Cl
-	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction) # function for lensed Cl
+	Cl_lens_func=lensed_Cl(delensing_fraction=delensing_fraction,ffp10_spectrum=ffp10_spectrum) # function for lensed Cl
 	
 	if useTensors: # include r = 0.1 estimate
 		Cl_r_func=r_Cl()

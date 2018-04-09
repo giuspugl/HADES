@@ -8,7 +8,7 @@ def ffp10_lensing(delensing_fraction=a.delensing_fraction,camb_spectrum=a.camb_s
 	If camb_spectrum=True; this uses the CAMB spectrum instead for rescaling."""
 	if camb_spectrum:
 		from .NoisePower import lensed_Cl
-		return lensed_Cl(delensing_fraction)
+		return lensed_Cl(delensing_fraction,ffp10_spectrum=False)
 	dat=np.load('LensTest/ClLensTrue.npz') # load ClBB spectrum
 	lensB=dat['ClBB']
 	ellsB=dat['ell']

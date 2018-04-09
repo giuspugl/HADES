@@ -6,7 +6,7 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/FullNoiseLens/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
@@ -27,8 +27,9 @@ class BICEP:
 	
 	log_noise = False # use log scaling for noise - only for large noise levels
 	
-	true_lensing = True # use FFP10 lensing spectrum rather than CAMB one
+	true_lensing = False # use FFP10 lensing spectrum rather than CAMB one
 	camb_spectrum = False # rescale FFP10 to CAMB 1D power spectrum for compatibility
+	ffp10_spectrum = True # use FFP10 spectrum rather than 1D CAMB one
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
