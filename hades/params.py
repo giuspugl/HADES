@@ -1,12 +1,11 @@
 import numpy as np
 import sys
-sys.path.append('/data/ohep2/')
 
 class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '~/CleanWidePatch/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
