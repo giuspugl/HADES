@@ -1,0 +1,46 @@
+# Dictionary file for cutting out tiles of a Healpix map
+
+nsNames = ['sample']
+
+# This specifies the coordinates of the first tile. Ra1Array and Dec0Array should be adjusted to ensure the tile has the correct width
+Ra0Array= [176]
+Ra1Array= [179] # 186/181/179
+Dec0Array = [2] # -5/0/2
+Dec1Array = [5]
+buffer = 0
+
+# Tile separation in degrees. NB: This is the separation of the tile centers NOT the Tile width. Tile width is controlled by the above [Ra, Dec] coordinates.
+mapWidthsDeg = 3
+
+# Location of working directory (all cut-outs will be placed in a sub-directory of this)
+mapDir = '/home/oliver/hades_testing/'
+
+# Directory to store map widths in
+workDir = mapDir+'3deg%s/' %mapWidthsDeg
+
+# Location of HEALPix map
+mapfilename = '../thermaldust_353GHz.fits' # (relative to workDir)
+
+# Optional Mask File
+cutoutMask=True
+
+# Specify location of mask file
+maskDir = '/home/oliver/HADES/masks/CleanerWidePatch2048.fits' # This is default mask used in the Philcox+ paper
+
+# NSIDE of input HEALPix map
+mapNside = 2048
+
+# Whether to convert from COSMO to IAU polarization convention by inverting the sign of the U-healpix map. This has non-trivial effects.
+flipU = True 
+
+# Apodisation parameters for tile masks. lenApod should be set to {200,100,60} for {10,5,3} degree width [NOT separation] tiles respectively. [i.e. tile_width*20]
+cosineApod={'apply':True,'lenApod':60,'pad':0} # 200/100/60 # 100 is for 5-degree, 60 for 3-degree etc
+
+## Other parameters
+applyPerPatchMask = True # Apply to each mask individually
+leadAuthorTag= 'FFP10'
+basename = 'fvs' # Cut-out basename (don't edit)
+mapUnits = 'KCMB353'
+#binFile = '/data/ohep2/sims/binSixty'
+
+
