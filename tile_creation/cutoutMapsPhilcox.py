@@ -117,7 +117,7 @@ for i in np.arange(nMaps):
             maskCutout = mapsT.copy()
             maskCutout.loadDataFromHealpixMap(mask)
 
-        # hack code to fix pyfits problems
+        """# hack code to fix pyfits problems
         import pyfits
         head_str=mapsT.header.tostring()
         hQ=mapsQ.header.tostring()
@@ -128,16 +128,16 @@ for i in np.arange(nMaps):
         mapsT.header=tmp.fromstring(head_str)
         mapsQ.header=tQ.fromstring(hQ)
         mapsU.header=tU.fromstring(hU)
-
+        """
         mapsT.writeFits(p['workDir'] + p['basename'] + 'mapT_%05i.fits'%i, overWrite = True)
         mapsQ.writeFits(p['workDir'] + p['basename'] + 'mapQ_%05i.fits'%i, overWrite = True)
         mapsU.writeFits(p['workDir'] + p['basename'] + 'mapU_%05i.fits'%i, overWrite = True)
         if p['cutoutMask']:
             # hack code
-            mM=maskCutout.header.tostring()
+            """mM=maskCutout.header.tostring()
             tM=pyfits.Header()
             maskCutout.header=tM.fromstring(tM)
-            
+            """
             maskCutout.writeFits(p['workDir'] + p['basename'] + 'mapMask_%05i.fits'%i, overWrite = True)
 
 

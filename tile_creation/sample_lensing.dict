@@ -1,4 +1,4 @@
-# Dictionary file for cutting out tiles of a Healpix map
+# Dictionary file for cutting out tiles of a Healpix lensing map. This should use the same parameters as the dust map.
 
 nsNames = ['sample']
 
@@ -13,13 +13,13 @@ buffer = 0
 mapWidthsDeg = 3
 
 # Location of working directory (all cut-outs will be placed in a sub-directory of this)
-mapDir = '/home/oliver/hades_testing/'
+mapDir = '/home/oliver/hades_testing/lens/'  # Note the addition of a lens/ subdirectory
 
 # Directory to store map widths in
 workDir = mapDir+'3deg%s/' %mapWidthsDeg
 
 # Location of HEALPix map
-mapfilename = '../thermaldust_353GHz.fits' # (relative to workDir)
+mapfilename = '../../FFP10Lensing.fits' # (relative to workDir)
 
 # Optional Mask File
 cutoutMask=True

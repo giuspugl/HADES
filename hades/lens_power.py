@@ -4,49 +4,51 @@ a=BICEP()
 from flipper import *
 
 def ffp10_lensing(delensing_fraction=a.delensing_fraction,camb_spectrum=a.camb_spectrum):
-	""" Return a spline fit to the ffp10 lensing C_l^BB spectrum. This is NOT identical to the CAMB spectrum used otherwise.
-	If camb_spectrum=True; this uses the CAMB spectrum instead for rescaling."""
-	if camb_spectrum:
-		from .NoisePower import lensed_Cl
-		return lensed_Cl(delensing_fraction,ffp10_spectrum=False)
-	dat=np.load('LensTest/ClLensTrue.npz') # load ClBB spectrum
-	lensB=dat['ClBB']
-	ellsB=dat['ell']
-	
-	# Create spline fit
-	from scipy.interpolate import UnivariateSpline
-	spl=UnivariateSpline(np.log(ellsB),np.log(lensB),k=5)
-	def spline(ell):
-		return np.exp(spl(np.log(ell)))*delensing_fraction
-		
-	return spline
+    """ Return a spline fit to the ffp10 lensing C_l^BB spectrum. This is NOT identical to the CAMB spectrum used otherwise.
+    If camb_spectrum=True; this uses the CAMB spectrum instead for rescaling."""
+    if camb_spectrum:
+        from .NoisePower import lensed_Cl
+        return lensed_Cl(delensing_fraction,ffp10_spectrum=False)
+    dat=np.load(a.hades_dir+'CAMB_Profiles/ClLensTrue.npz') # load ClBB spectrum
+    lensB=dat['ClBB']
+    ellsB=dat['ell']
+    
+    # Create spline fit
+    from scipy.interpolate import UnivariateSpline
+    spl=UnivariateSpline(np.log(ellsB),np.log(lensB),k=5)
+    def spline(ell):
+        return np.exp(spl(np.log(ell)))*delensing_fraction
+        
+    return spline
 
 def lens_ratio_correction(lensPower,lensFourier,delensing_fraction=a.delensing_fraction,lMax=a.lMax,l_step=a.l_step):
-	"""Rescale the Fourier lens map using the power lensing map to ensure that it reproduces the correct
-	spectrum for ell, to avoid excess of power at high ell, as observed in cut-outs."""
-	# First compute the binned power from the maps
-	from .PowerMap import oneD_binning
-	llF,ppF=oneD_binning(lensPower,1,lMax,l_step,exactCen=False)
-	
-	from .lens_power import ffp10_lensing
-	ideal_lens=ffp10_lensing(delensing_fraction) # expected power 
-	
-	# Create spline fit to ratio:
-	from scipy.interpolate import UnivariateSpline
-	spl=UnivariateSpline(np.log(llF),np.log(ideal_lens(llF)/ppF),k=5)
-	def ratio(ell):
-    		output=np.exp(spl(np.log(ell)))
-    		output[ell==0.]=1. # avoid infinities in log
-    		return output
+    """Rescale the Fourier lens map using the power lensing map to ensure that it reproduces the correct
+    spectrum for ell, to avoid excess of power at high ell, as observed in cut-outs."""
+    # First compute the binned power from the maps
+    from .PowerMap import oneD_binning
+    llF,ppF=oneD_binning(lensPower,1,lMax,l_step,exactCen=False)
+    from .lens_power import ffp10_lensing
+    ideal_lens=ffp10_lensing(delensing_fraction) # expected power 
+    
+    # Create spline fit to ratio:
+    from scipy.interpolate import UnivariateSpline
+    spl=UnivariateSpline(np.log(llF),np.log(ideal_lens(llF)/ppF),k=5)
+    def ratio(ell):
+            output=np.exp(spl(np.log(ell)))
+            output[ell==0.]=1. # avoid infinities in log
+            return output
 
-	# Now rescale the Fourier map by sqrt(ratio)
-	fourierScaled=lensFourier.copy()
-	fourierScaled.kMap=fourierScaled.kMap*np.sqrt(ratio(fourierScaled.modLMap))
-	
-	return fourierScaled
-		
+    # Now rescale the Fourier map by sqrt(ratio)
+    fourierScaled=lensFourier.copy()
+    #	try:
+    fourierScaled.kMap=fourierScaled.kMap*np.sqrt(ratio(fourierScaled.modLMap))
+    #	except RuntimeWarning:
+    #        pass
+
+    return fourierScaled
+        
 def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,\
-			fourier=True,power=False,flipU=True,delensing_fraction=a.delensing_fraction,lMax=a.lMax,l_step=a.l_step):
+            fourier=True,power=False,flipU=True,delensing_fraction=a.delensing_fraction,lMax=a.lMax,l_step=a.l_step):
     """ Function to create 2D B-mode fourier map from FFP10 lensed scalar map.
     Yanked from PaddedPower.MakePowerAndFourierMaps
     Input: map_id (tile number)
@@ -61,14 +63,14 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     """
     import flipperPol as fp
     
-    inDir='LensTest/%sdeg%s/' %(map_size,sep)
+    inDir=a.root_dir+'lens/%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
     Qmap=liteMap.liteMapFromFits(inDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
     Umap=liteMap.liteMapFromFits(inDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
     if flipU:
-    	Umap.data*=-1.
+        Umap.data*=-1.
     maskMap=liteMap.liteMapFromFits(inDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
     
     # Compute zero-padded maps (including mask map)
@@ -93,7 +95,7 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     
     # Rescale to correct delensing fraction
     fB.kMap*=np.sqrt(delensing_fraction)
-
+    
     # Account for window factor - this accounts for power loss due to padding
     fB.kMap/=np.sqrt(windowFactor)
     #fE.kMap/=np.sqrt(windowFactor)
@@ -115,12 +117,12 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     
     #del zWindow,maskMap
     if power:
-    	BBcorr=fftTools.powerFromFFT(fBcorr)
+        BBcorr=fftTools.powerFromFFT(fBcorr)
     if fourier and power:
-	return fBcorr,BBcorr
+        return fBcorr,BBcorr
     elif fourier:
-    	return fBcorr
+        return fBcorr
     elif power:
-	del fBcorr
-	return BBcorr
-	
+        del fBcorr
+        return BBcorr
+    

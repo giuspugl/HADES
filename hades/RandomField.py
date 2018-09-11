@@ -3,7 +3,8 @@ import numpy
 from .params import BICEP
 a=BICEP()
 from flipper import *
-import randomstate as rnd
+from randomgen import RandomGenerator
+rnd = RandomGenerator()
 
 def precompute(liteMap,spline,lMin=a.lMin,lMax=a.lMax):
 	""" Precompute parameters from template"""
@@ -115,8 +116,8 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
         if precomp!=None:
         	Nx,Ny,rootP=precomp # load precomputed components
         
-        	realPart =rootP*rnd.standard_normal([Ny,Nx],method='zig')
-		imgPart = rootP*rnd.standard_normal([Ny,Nx],method='zig')
+        	realPart =rootP*rnd.standard_normal([Ny,Nx])#method='zig')
+		imgPart = rootP*rnd.standard_normal([Ny,Nx])#,method='zig')
 	
         	kMap = realPart+1.0j*imgPart
         	del realPart,imgPart,rootP
@@ -168,8 +169,8 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
 	        p = numpy.reshape(kk,[Ny,Nx]) /area * (Nx*Ny)**2        
 	        #p[p<0.]=0.
 	       	# Compute real + imag parts
-		realPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx],method='zig')*np.sqrt(0.5)
-		imgPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx],method='zig')*np.sqrt(0.5)
+		realPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx])*np.sqrt(0.5)#,method='zig')*np.sqrt(0.5)
+		imgPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx])*np.sqrt(0.5)#,method='zig')*np.sqrt(0.5)
 		
 	        kMap = realPart+1.0j*imgPart
 	        del realPart,imgPart,kk,ll

@@ -16,17 +16,16 @@ class BICEP:
     rotation_angles=np.arange(0,22.5,0.9) # Angles to pre-rotate tiles by
     
     ## MC parameters
-    N_sims = 500 # No. of MC simulations used to create parameter distributions
-    N_bias = 500 # No. simulations used for realisation-dependent debiasing
+    N_sims = 100 # No. of MC simulations used to create parameter distributions (500 is the default)
+    N_bias = 100 # No. simulations used for realisation-dependent debiasing (500 is the default)
 
     ## Experimental parameters
     freq = 150 # Desired map frequency in GHz. Currently only 150 GHz (peak BICEP sensitivity) and 353 GHz (original simulations) are implemented - [these rely on non-linear color conversions]
     f_dust = 1. # Scalable dust fraction where f_dust = 1 has no cleaning and f_dust = 0 has 100% dust cleaning efficiency.
-    delensing_fraction = 0.1 
     
     ## Noise model [see table 1 of Philcox+2018 for full descriptions]
     experiment_profiles= ['Zero', 'BICEP2', 'Simons', 'S4'] # Loaded experimental profiles
-    experiment_profile_index = 0
+    experiment_profile_index = 3
 
     if experiment_profiles[experiment_profile_index]=='BICEP2':
         FWHM = 30. # Experimental noise FWHM [theta_FWHM] in arcmin
@@ -70,7 +69,7 @@ class BICEP:
     noi_par_NoisePower=np.linspace(0.1,5.1,20) # noise_power ranges
     noi_par_FWHM=np.linspace(0,31.,20) # noise FWHM values
     noi_par_delensing=[0.1,1.0] # delensing values
-    remakeErrors=True
+    remakeErrors=False
 
     ########################################################################################
     ## OTHER TESTING PARAMETERS
@@ -80,7 +79,7 @@ class BICEP:
     rescale_freq = True # rescale to correct frequency - turn OFF for rTests etc.
     KKdebiasH2 = True # subtract expected noise spectrum for Afs, Afc in estimators
     log_noise = False # use log scaling for noise - only for large noise levels
-    true_lensing = False # use FFP10 lensing spectrum rather than CAMB one
+    true_lensing = True # use FFP10 lensing spectrum rather than CAMB one
     camb_spectrum = False # rescale FFP10 to CAMB 1D power spectrum for compatibility
     ffp10_spectrum = True # use FFP10 spectrum rather than 1D CAMB one
 

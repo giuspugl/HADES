@@ -83,7 +83,7 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 		for j in range(a.err_repeats):
 			suffix='_'+str(i)+'_'+str(j)
 			outs=patch_hexadecapole(suffix=suffix,map_size=map_size,sep=sep,FWHM=FWHM,noise_power=noise_power,\
-				delensing_fraction=delensing_fraction,freq=freq,folder=folder,plot=False,monopole=True)
+				delensing_fraction=delensing_fraction,freq=freq,folder=folder,plot=False,monopole=True,display=False)
 			sigs.append(outs[0])
 			trueA.append(outs[3])
 			A.append(outs[2])
