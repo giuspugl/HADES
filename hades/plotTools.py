@@ -194,7 +194,7 @@ def mollweide_map(dat,ra,dec,cbar_label=None,cmap='jet',decLims=[-90,-40,5],raLi
 
 
 def hexadecapole_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.noise_power,\
-	freq=a.freq,delensing_fraction=a.delensing_fraction,root_dir=a.root_dir):
+	freq=a.freq,delensing_fraction=a.delensing_fraction,root_dir=a.root_dir,border=False):
 	""" Function to create plots for each tile.
 	Other plots are saved in the Maps/ directory """
 	import warnings # catch rogue depracation warnings
@@ -307,9 +307,7 @@ def hexadecapole_plots(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a.n
 	from .NoisePower import good_coords
 	ra,dec=good_coords(map_size,sep,len(goodMaps),root_dir=root_dir)
 	# Load in border of BICEP region if necessary:
-	border=False
-	if root_dir=='/data/ohep2/WidePatch/' or root_dir=='/data/ohep2/CleanWidePatch/' or root_dir=='/data/ohep2/FFP8/':
-		border=True # for convenience
+	if border:
 		from hades.plotTools import BICEP_border
 		temp=BICEP_border(map_size,sep)
 		if temp!=None:
