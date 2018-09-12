@@ -88,6 +88,9 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
         
     else:
         finalFactor=factor # just use the A estimate from input      
+    
+    if a.fixFactor:
+	finalFactor=1.6e-12*a.f_dust**2.
 
     # Now compute A,Afs,Afc (recompute A s.t. all best estimators use same SNR)
     SNmap=(finalFactor*fiducialClMap)/(finalFactor*fiducialClMap+OtherClMap) # signal-to-noise ratio

@@ -97,7 +97,8 @@ def fast_real_fill_from_Cell(liteMap,spline,precompute,bufferFactor = 1,returnAl
         	return self
 
 
-def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,returnAll=False,padded_template=None,fourier=False,precomp=None):
+def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,returnAll=False,padded_template=None,\
+			fourier=False,precomp=None,realFourier=a.realFourier):
         """
         Generates a GRF from an input power spectrum specified as ell, Cell 
         BufferFactor =1 means the map will be periodic boundary function
@@ -111,12 +112,90 @@ def real_fill_from_Cell(liteMap,ell,Cell,bufferFactor = 1,lMin=a.lMin,log=True,r
         Yanked from liteMap.fillWithGaussianRandomField -> added log-spline fitting
         """
         import numpy
+        if realFourier:
+        	self=liteMap
+        	#print('Enforcing reality')
+        	ft = fftTools.fftFromLiteMap(self)
+	        
+	        Ny = self.Ny*bufferFactor
+	        Nx = self.Nx*bufferFactor
+	        #self.Nx=Nx
+	        #self.Ny=Ny
+	        #self.pixScaleX=ft.pixScaleX
+	        #self.pixScaleY=ft.pixScaleY
+	        
+	        bufferFactor = int(bufferFactor)
+	        
+	        
+	        realPart = numpy.zeros([Ny,Nx])
+	        imgPart  = numpy.zeros([Ny,Nx])
+	        
+	        ly = numpy.fft.fftfreq(Ny,d = self.pixScaleY)*(2*numpy.pi)
+	        lx = numpy.fft.fftfreq(Nx,d = self.pixScaleX)*(2*numpy.pi)
+	        #print ly
+	        modLMap = numpy.zeros([Ny,Nx])
+	        iy, ix = numpy.mgrid[0:Ny,0:Nx]
+	        modLMap[iy,ix] = numpy.sqrt(ly[iy]**2+lx[ix]**2)
+	        
+		# Fit input Cell to spline
+		from scipy.interpolate import UnivariateSpline
+		if log:
+			spl=UnivariateSpline(ell,np.log(Cell),k=5) # use a quintic spline here
+		else:
+			spl=UnivariateSpline(ell,Cell,k=5)
+		ll=np.ravel(modLMap)
+		kk=np.zeros_like(ll)#np.ones_like(ll)*1e-40
+		
+		# Apply filtering
+		idhi=np.where(ll>max(ell))
+		idlo=np.where(ll<lMin)
+		idgood=np.where((ll<max(ell))&(ll>lMin))
+		if log:
+			kk[idgood]=np.exp(spl(ll[idgood]))
+		else:
+			kk[idgood]=spl(ll[idgood])
+		kk[idhi]=min(kk[idgood]) #Cell[-1] # set unwanted values to small value
+		kk[idlo]=Cell[0]
+		
+	        area = Nx*Ny*self.pixScaleX*self.pixScaleY
+	        p = numpy.reshape(kk,[Ny,Nx]) /area * (Nx*Ny)**2        
+	        #p[p<0.]=0.
+	       	# Compute real + imag parts
+		realPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx])*np.sqrt(0.5)#,method='zig')*np.sqrt(0.5)
+		imgPart = np.sqrt(p)*rnd.standard_normal([Ny,Nx])*np.sqrt(0.5)#,method='zig')*np.sqrt(0.5)
+		
+	        kMap = realPart+1.0j*imgPart
+	        
+	        # CHANGES MADE HERE
+		llx,lly=np.meshgrid(lx,ly) # 2D array for lx and ly
+		for x in range(Nx):
+        		for y in range(Ny):
+            			if lly[y,x]<0.:
+            				idy,idx=np.where((lly==-lly[y,x])&(llx==-llx[y,x]))
+               				kMap[y,x]=np.conj(kMap[idy,idx])
+                			#kMap[y,x]=np.conj(kMap[-y,-x]) # enforce correct symmetry
+       
+	        del realPart,imgPart,kk,ll
+	        
+		data=numpy.real(numpy.fft.ifft2(kMap)) # numpy.real part just removes any small inaccuracies
+        
+        	b = bufferFactor
+        	self.data = data[(b-1)/2*self.Ny:(b+1)/2*self.Ny,(b-1)/2*self.Nx:(b+1)/2*self.Nx]
+        
+        	if returnAll:
+        		selfAll=padded_template.copy()
+        		selfAll.data=data[:selfAll.Ny,:selfAll.Nx]
+        		return self,selfAll
+        	else:
+        		if fourier:
+        			return self,kMap
+        		return self
         
         self=liteMap
         if precomp!=None:
         	Nx,Ny,rootP=precomp # load precomputed components
         
-        	realPart =rootP*rnd.standard_normal([Ny,Nx])#method='zig')
+        	realPart =rootP*rnd.standard_normal([Ny,Nx])#,method='zig')
 		imgPart = rootP*rnd.standard_normal([Ny,Nx])#,method='zig')
 	
         	kMap = realPart+1.0j*imgPart

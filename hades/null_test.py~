@@ -133,7 +133,10 @@ def create_significances(map_size=a.map_size,sep=a.sep,FWHM=a.FWHM,noise_power=a
 		plt.savefig(outDir+'NullTestPaddedPlot_f%s_ms%s_s%s_fw%s_np%s_d%s.png' %(a.freq,a.map_size,a.sep,a.FWHM,a.noise_power,a.delensing_fraction),bbox_inches='tight')
 		plt.close()
 	
-	outDir=root_dir+'NullTests/'
+	if a.true_lensing:
+		outDir=root_dir+'NullTestsLensed/'
+	else:
+		outDir=root_dir+'NullTests/'
 	import os
 	if not os.path.exists(outDir):
 		os.makedirs(outDir)

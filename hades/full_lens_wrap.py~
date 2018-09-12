@@ -7,11 +7,8 @@ if __name__=='__main__':
 	""" This is the iterator for batch processing the map creation through HTCondor. Each map is done separately, and argument is map_id."""
 	import time
 	start_time=time.time()
-	import sys
-	import pickle
-	sys.path.append('/data/ohep2/')
-	sys.path.append('/home/ohep2/Masters/')
 	import os
+	import sys
 	
 	batch_id=int(sys.argv[1]) # batch_id number
 	
@@ -27,6 +24,9 @@ if __name__=='__main__':
 		if os.path.exists(outDir+'%s.npy' %batch_id):
 			print 'output exists; exiting'
 			sys.exit()
+	import pickle
+	sys.path.append('/data/ohep2/')
+	sys.path.append('/home/ohep2/Masters/')
 	
 	if batch_id<110: # create first time
 		from hades.batch_maps import create_good_map_ids
@@ -109,6 +109,8 @@ def lensed_wrap(map_id,map_size=a.map_size,\
 	10: true monopole (from noiseless simulation) - for testing
 	11th: bias (isotropic estimate of <H^2>)
 	"""
+	print ('Using full lensing')
+	print root_dir
 	lCut=int(cutFactor*lMax) # maximum ell for Fourier space maps
 	
 	# First compute B-mode map from padded-real space map with desired padding ratio. Also compute the padded window function for later use
@@ -130,6 +132,19 @@ def lensed_wrap(map_id,map_size=a.map_size,\
 		from .PaddedPower import fourier_noise_test
 		fBdust,unpadded_fBdust=fourier_noise_test(padded_window,unpadded_window,ll,pp,padding_ratio=padding_ratio,unpadded=False,log=True)
 		#fBdust.kMap=fill_from_Cell(fBdust.copy(),ll,pp,fourier=True,power=False) # generate Gaussian realisation
+	
+	if a.test_fix_A:
+		print 'fixAtest'
+		def test_pow(ell,ang,fs=0.6,fc=0.7,A=1e-11):
+    			ang=ang*np.pi/180.
+    			return A*(1.+ell)**(-2.42)*(1-fs*np.sin(4.*ang)-fc*np.cos(4.*ang))
+		# Overwrite with fixed dust amplitude + fs,fc
+		from scipy.stats import norm
+		var=test_pow(fBdust.modLMap,fBdust.thetaMap)
+		fBdust.kMap=norm.rvs(loc=0.,scale=var/2.)+norm.rvs(loc=0.,scale=var/2.)*1.0j
+		var=test_pow(unpadded_fBdust.modLMap,unpadded_fBdust.thetaMap)
+		unpadded_fBdust.kMap=norm.rvs(loc=0.,scale=var/2.)+norm.rvs(loc=0.,scale=var/2.)*1.0j
+
 	#return powDust,fBdust,unpadded_fBdust
 	# Reduce dust amplitude by 'dedusting fraction'
 	unpadded_fBdust.kMap*=f_dust
@@ -142,18 +157,15 @@ def lensed_wrap(map_id,map_size=a.map_size,\
 	inDir=root_dir+'%sdeg%s/' %(map_size,sep)
 	
 	# Compute fourier space lensing map:
-	from .lens_power import MakeFourierLens
-	fourier_lens=MakeFourierLens(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,\
-			fourier=True,power=False,flipU=True,delensing_fraction=delensing_fraction,\
-			lMax=lCut,l_step=l_step)
- 	unpadded_lens=MakeFourierLens(map_id,padding_ratio=1.,map_size=map_size,sep=sep,\
- 			fourier=True,power=False,flipU=True,delensing_fraction=delensing_fraction,\
- 			lMax=lCut,l_step=l_step*padding_ratio)
+	from .lens_power import MakeFourierLens2
+	fourier_lens=MakeFourierLens2(map_id,padding_ratio=padding_ratio,map_size=map_size,sep=sep,\
+			fourier=True,power=False,delensing_fraction=delensing_fraction)
+ 	unpadded_lens=MakeFourierLens2(map_id,padding_ratio=1.,map_size=map_size,sep=sep,\
+ 			fourier=True,power=False,delensing_fraction=delensing_fraction)
 	fourier_lens=DegradeFourier(fourier_lens,lCut) # discard high-ell pixels
 	unpadded_lens=DegradeFourier(unpadded_lens,lCut) # discard high-ell pixels
 	
-	
-	# First compute the total noise (instrument+lensing+tensors)
+	# First compute the total noise (instrument+tensors)
 	from .NoisePower import noise_model,r_Cl
 	
 	if useTensors: # include r = 0.1 estimate
@@ -214,7 +226,7 @@ def lensed_wrap(map_id,map_size=a.map_size,\
 	trueA=p[0]
 	del Bpow		
 	
-	return totPow,trueA
+	#return totPow,trueA
 	
 	# Compute rough semi-analytic C_ell spectrum
 	def analytic_model(ell,A_est,slope):
@@ -234,7 +246,11 @@ def lensed_wrap(map_id,map_size=a.map_size,\
 	
 	# Compute 1D power spectrum by binning in annuli
 	from .PowerMap import oneD_binning
-	l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),lMin*padding_ratio,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,\
+	if a.padded_1D_spectrum:
+		l_cen,mean_pow = oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,\
+					C_ell_model=analytic_model,params=[A_est,slope])
+	else:
+		l_cen,mean_pow = oneD_binning(unpadded_totPow.copy(),lMin*padding_ratio,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,\
 					C_ell_model=analytic_model,params=[A_est,slope]) 
 	#l_cen,mean_pow=oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope])
 	# gives central binning l and mean power in annulus using window function corrections 

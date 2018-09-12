@@ -71,7 +71,7 @@ if __name__=='__main__':
 
 def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,\
                   f_dust=a.f_dust,lMax=a.lMax,lMin=a.lMin,l_step=a.l_step,FWHM=a.FWHM,noise_power=a.noise_power,\
-                  slope=a.slope,delensing_fraction=a.delensing_fraction,useQU=a.useQU):
+                  slope=a.slope,delensing_fraction=a.delensing_fraction,useQU=a.useQU,N_bias=a.N_bias):
     """Compute the polarisation angle for a specific tile, creating a model B-power spectrum + cross-spectra
     in order to find the angle including the ambiguity in sin(2alpha), cos(2alpha) due to initial computation
     of sin(4alpha), cos(4alpha).
@@ -163,10 +163,61 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
 
     # Step 3: Compute angle estimate
     powBtrue=fftTools.powerFromFFT(fBtrue)
+    unpadded_powBtrue=fftTools.powerFromFFT(unpadded_totFmap)
     from hades.KKdebiased import derotated_estimator
     output=derotated_estimator(powBtrue,map_id,lMin=lMin,lMax=lMax,FWHM=FWHM,noise_power=noise_power,delensing_fraction=delensing_fraction,slope=slope)
     A,fs,fc,Afs,Afc,_=output
     HexPow2=Afs**2.+Afc**2.
+    
+    if a.debias_dedust:
+    	from .RandomField import padded_fill_from_Cell
+	bias_data=np.zeros(N_bias)
+	
+	def analytic_model(ell,A_est,slope):
+		"""Use the estimate for A to construct analytic model.
+		NB: This is just used for finding the centres of the actual binned data.
+		"""
+		return total_Cl_noise(ell)+A_est*ell**(-slope)
+	
+	from .PowerMap import oneD_binning
+	l_cen,mean_pow = oneD_binning(unpadded_powBtrue.copy(),lMin*padding_ratio,lCut,l_step*padding_ratio,binErr=False,exactCen=a.exactCen,\
+					C_ell_model=analytic_model,params=[A,slope]) 
+	#l_cen,mean_pow=oneD_binning(totPow.copy(),lMin,lCut,l_step,binErr=False,exactCen=a.exactCen,C_ell_model=analytic_model,params=[A_est,slope])
+	# gives central binning l and mean power in annulus using window function corrections 
+	
+	# Create spline fit
+	from scipy.interpolate import UnivariateSpline
+	spl=UnivariateSpline(l_cen,np.log(mean_pow),k=5)
+	def spline(ell):
+		return np.exp(spl(ell))
+	#del l_cen,mean_pow
+	
+	# Precompute useful data:
+	from hades.RandomField import precompute
+	precomp=precompute(padded_window.copy(),spline,lMin=lMin,lMax=lMax)
+	
+	for n in range(N_bias):
+		if n%100==0:
+			print 'Computing bias sim %s of %s' %(n+1,N_bias)
+		fBias=padded_fill_from_Cell(padded_window.copy(),l_cen,mean_pow,lMin=lMin,unPadded=a.unPadded,precomp=precomp)#,padding_ratio=padding_ratio)
+		bias_cross=fftTools.powerFromFFT(fBias.copy(),totFmap.copy()) # cross map
+		bias_self=fftTools.powerFromFFT(fBias.copy()) # self map
+		# First compute estimators on cross-spectrum
+		cross_ests=derotated_estimator(bias_cross.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
+						factor=A,FWHM=FWHM,noise_power=noise_power,\
+						rot=a.rot,delensing_fraction=delensing_fraction,useTensors=a.useTensors,\
+						debiasAmplitude=False,rot_average=a.rot_average,KKdebiasH2=False) # NB: CHANGE DEBIAS_AMPLITUDE parameter here
+		self_ests=derotated_estimator(bias_self.copy(),map_id,lMin=lMin,lMax=lMax,slope=slope,\
+						factor=A,FWHM=FWHM,noise_power=noise_power,\
+						rot=a.rot,delensing_fraction=delensing_fraction,useTensors=a.useTensors,\
+						debiasAmplitude=True,rot_average=a.rot_average,KKdebiasH2=a.KKdebiasH2)
+		bias_data[n]=(-1.*(self_ests[3]**4.+self_ests[4]**2.)+4.*(cross_ests[3]**2.+cross_ests[4]**2.))*wCorrection
+	# Now compute the mean bias - this debiases the DATA only
+	bias=np.mean(bias_data)
+	del bias_self,bias_cross
+	
+    HexPow2-=bias	
+    
     norm=np.sqrt(Afs**2.+Afc**2.)
     fsbar,fcbar=Afs/norm,Afc/norm
 
@@ -200,7 +251,7 @@ def compute_angle(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a
         alpha0+=np.pi/2.
        
     # Step 7: Compute the ratio of H^2/<I^4> for rescaling
-    ratio=(HexPow2/scaling)**0.25
+    ratio=(np.abs(HexPow2)/scaling)**0.25
     
     alpha_deg=alpha0*180./np.pi
     print 'MapID: %s Angle: %.2f Ratio: %.2e' %(map_id,alpha_deg,ratio)

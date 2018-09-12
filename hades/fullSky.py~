@@ -25,7 +25,7 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 	jndex=0
 	import os
 	
-	A,eps,eps_err,eps_mean,angle,angle_err,H2,H2_mean,H2_err=[],[],[],[],[],[],[],[],[]
+	A,eps,eps_err,eps_mean,angle,angle_err,H2,H2_mean,H2_err,Afs,Afc,H2_MC=[],[],[],[],[],[],[],[],[],[],[],[]
 	ras_all,decs_all=[],[]
 	# Now iterate over files
 	while True:
@@ -58,6 +58,9 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 		H2.append(data[9][0])
 		H2_mean.append(data[9][1])
 		H2_err.append(data[9][2])
+		H2_MC.append(data[7][7][0])
+		Afs.append(data[3][0])
+		Afc.append(data[4][0])
 		index+=1
 	ras=ras_all
 	decs=decs_all	
@@ -78,12 +81,13 @@ def full_sky_reconstructor(root_dir=a.root_dir,sep=a.sep,map_size=a.map_size,FWH
 		angle=np.array(angle)[ids]
 		angle_err=np.array(angle_err)[ids]
 		H2=np.array(H2)[ids]
+		H2_MC=np.array(H2_MC)[ids]
 		H2_mean=np.array(H2_mean)[ids]
 		H2_err=np.array(H2_err)[ids]
 	# Save output
 	np.savez(root_dir+'all_dat%s_f%s_ms%s_s%s_fw%s_np%s_d%s.npz' %(maxDec,freq,map_size,sep,FWHM,noise_power,delensing_fraction),ras=ras,decs=decs,\
 		A=A,eps=eps,eps_mean=eps_mean,eps_err=eps_err,\
-		angle=angle,angle_err=angle_err,H2=H2,H2_mean=H2_mean,H2_err=H2_err)
+		angle=angle,angle_err=angle_err,H2=H2,H2_mean=H2_mean,H2_err=H2_err,Afs=Afs,Afc=Afc,H2_MC=H2_MC)
 	
 	print 'complete'
 	

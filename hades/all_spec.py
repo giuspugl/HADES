@@ -1,0 +1,63 @@
+import numpy as np
+from flipper import *
+from hades.params import BICEP
+a=BICEP()
+FWHM=1.5
+noise_power=1.
+delensing_fraction=0.1
+f_dust=0.3
+f_noise=1.
+root_dir='/data/ohep2/CleanWidePatch/'
+
+def get_spectra(map_id):
+	# 1. create fourier data
+	print map_id
+	from .PaddedPower import MakePowerAndFourierMaps
+	
+	fBdust,padded_window,unpadded_window=MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=False,returnMasks=True,flipU=a.flipU,root_dir=root_dir)
+	
+	from .lens_power import MakeFourierLens2
+	fourier_lens=MakeFourierLens2(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,\
+			fourier=True,power=False,delensing_fraction=1.)
+ 	
+ 	from .NoisePower import noise_model
+	def total_Cl_noise(l):
+		return noise_model(l,FWHM=FWHM,noise_power=noise_power)
+	ellNoise=np.arange(5,2500) # ell range for noise spectrum
+	
+	from .PaddedPower import fourier_noise_test
+	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=a.padding_ratio,unpadded=False,log=a.log_noise)
+	
+	totFourier=fourierNoise.copy()
+	totFourier.kMap=fBdust.kMap*f_dust+fourier_lens.kMap*np.sqrt(delensing_fraction)+fourierNoise.kMap*f_noise
+	totPow=fftTools.powerFromFFT(totFourier)
+	
+	from .PowerMap import oneD_binning
+	ll,pp,ee=oneD_binning(totPow,90,2000,62,exactCen=False,binErr=True)
+	
+	from .KKdebiased import derotated_estimator
+	p=derotated_estimator(totPow.copy(),map_id,lMin=a.lMin,lMax=a.lMax,slope=a.slope,factor=None,FWHM=FWHM,\
+			noise_power=noise_power,rot=a.rot,delensing_fraction=delensing_fraction,useTensors=False,debiasAmplitude=True,\
+			rot_average=a.rot_average,KKdebiasH2=True,true_lensing=True)
+	A=p[0]
+	H2=p[3]**2.+p[4]**2.
+	
+	return [ll,pp,ee,A,H2]
+	
+if __name__=='__main__':
+	import multiprocessing as mp
+	p=mp.Pool()
+	import tqdm
+	from hades.all_spec import get_spectra
+	print root_dir
+	goodIDs=np.load(root_dir+'3deg3GoodIDs.npy')
+	#print goodIDs
+	
+	outs=list(tqdm.tqdm(p.imap_unordered(get_spectra,goodIDs),total=len(goodIDs)))
+	ll=[o[0] for o in outs]
+	pp=[o[1] for o in outs]
+	ee=[o[2] for o in outs]
+	A=[o[3] for o in outs]
+	H2=[o[4] for o in outs]
+	np.savez(root_dir+'AllSpectra.npz',ll=ll,pp=pp,ee=ee,A=A,H2=H2)
+	print 'complete'

@@ -6,6 +6,7 @@ class BICEP:
     
     hades_dir = '/home/oliver/HADES/' # directory where HADES is installed
     root_dir = '/home/oliver/hades_testing/' # directory to house all simulation cut-outs + analysis products
+    full_lens_dir='/home/oliver/hades_testing/lens/' # directory housing lensing cut-outs
     flipU = True # This converts between COSMO [in many input maps] and IAU [used by flipper] polarisation conventions. If true, this reverses the sign of the U-polarisation map which has non-trivial effects on the analysis.
     
     ## Tile parameters
@@ -111,4 +112,10 @@ class BICEP:
     hyp_slope=np.arange(2.2,3.0,0.2)
     hyp_map_size=np.array([2,3,5])
     
+    # testing
+    fixFactor = False # use fixed SNR in estimators
+    realFourier = False
+    padded_1D_spectrum = True
+    
+    test_fix_A=False
     

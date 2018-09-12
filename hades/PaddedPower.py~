@@ -192,7 +192,7 @@ def fourier_noise_test(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.p
 	from .RandomField import real_fill_from_Cell
 	initial_map,kMap=real_fill_from_Cell(unpadded_mask.copy(),ell,CellNoise,bufferFactor=1,lMin=min(ell),log=log,fourier=True)
 	from .PaddedPower import zero_padding
-	padded_mask=zero_padding(unpadded_mask.copy(),padding_ratio) # to avoid small length differences
+	#padded_mask=zero_padding(unpadded_mask.copy(),padding_ratio) # to avoid small length differences
 	padded_map=zero_padding(initial_map,padding_ratio)
 	padded_map.data*=padded_mask.data
 	#initial_map.data*=unpadded_mask.data
@@ -246,7 +246,7 @@ def fourier_noise_map(padded_mask,unpadded_mask,ell,CellNoise,padding_ratio=a.pa
    		return fourier_noise
    	
 	
-def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMasks=False,flipU=a.flipU):
+def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,freq=a.freq,fourier=True,power=True,returnMasks=False,flipU=a.flipU,root_dir=a.root_dir):
     """ Function to create 2D B-mode power map from real space map padded with zeros.
     Input: map_id (tile number)
     map_size (in degrees)
@@ -261,7 +261,7 @@ def MakePowerAndFourierMaps(map_id,padding_ratio=a.padding_ratio,map_size=a.map_
     """
     import flipperPol as fp
     
-    inDir=a.root_dir+'%sdeg%s/' %(map_size,sep)
+    inDir=root_dir+'%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')

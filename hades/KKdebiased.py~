@@ -4,7 +4,7 @@ a=BICEP()
 
 def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_power=a.noise_power,\
     slope=a.slope,factor=None,rot=0.,delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,\
-    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None,KKdebiasH2=a.KKdebiasH2,true_lensing=a.true_lensing):
+    debiasAmplitude=True,rot_average=a.rot_average,correct=True,OtherClMap=None,KKdebiasH2=a.KKdebiasH2,true_lensing=False):
     """Use modified KK14 estimators to compute polarisation hexadecapole amplitude and angle via Afs,Afc parameters.
     This uses the noise model in hades.NoisePower.noise_model.
     A is computed recursively, since the S/N ratio depends on it (weakly).
@@ -88,6 +88,9 @@ def derotated_estimator(map,map_id,lMin=a.lMin,lMax=a.lMax,FWHM=a.FWHM,noise_pow
         
     else:
         finalFactor=factor # just use the A estimate from input      
+    
+    if a.fixFactor:
+	finalFactor=1.6e-12*f_dust**2.
 
     # Now compute A,Afs,Afc (recompute A s.t. all best estimators use same SNR)
     SNmap=(finalFactor*fiducialClMap)/(finalFactor*fiducialClMap+OtherClMap) # signal-to-noise ratio

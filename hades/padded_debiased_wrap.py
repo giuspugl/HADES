@@ -74,7 +74,7 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	slope=a.slope,l_step=a.l_step,lMin=a.lMin,lMax=a.lMax,rot=a.rot,freq=a.freq,\
 	delensing_fraction=a.delensing_fraction,useTensors=a.useTensors,f_dust=a.f_dust,\
 	rot_average=a.rot_average,useBias=a.useBias,padding_ratio=a.padding_ratio,unPadded=a.unPadded,flipU=a.flipU,root_dir=a.root_dir,\
-	KKdebiasH2=a.KKdebiasH2,cutFactor=1.35,ffp10_spectrum=a.ffp10_spectrum):
+	KKdebiasH2=a.KKdebiasH2,cutFactor=1.25,ffp10_spectrum=a.ffp10_spectrum):
 	""" Compute the estimated angle, amplitude and polarisation fraction with noise, correcting for bias.
 	Noise model is from Hu & Okamoto 2002 and errors are estimated using MC simulations, which are all saved.
 	
@@ -118,10 +118,14 @@ def padded_wrap(map_id,map_size=a.map_size,\
 			
 	# Also compute unpadded map to give binning values without bias
 	unpadded_fBdust=MakePowerAndFourierMaps(map_id,padding_ratio=1.,map_size=map_size,sep=sep,freq=freq,fourier=True,power=False,returnMasks=False,flipU=flipU,root_dir=root_dir)
-	unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels	
-	fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
-	padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
-	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
+	#unpadded_fBdust_large=DegradeFourier(unpadded_fBdust,lCut+200)
+	#unpadded_fBdust=DegradeFourier(unpadded_fBdust,lCut) # remove high ell pixels
+	#fBdust_large=DegradeFourier(fBdust.copy(),lCut+200)
+	#fBdust=DegradeFourier(fBdust,lCut) # discard high-ell pixels
+	bigger_window=unpadded_window.copy()
+	#bigger_window=DegradeMap(bigger_window.copy(),lCut+200)
+	#padded_window=DegradeMap(padded_window.copy(),lCut) # remove high-ell data
+	#unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
 	
 	if a.hexTest:
 		# TESTING - replace fourier B-mode from dust with random isotropic realisation of self
@@ -156,13 +160,20 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	
 	# Now create a fourier space noise map	
 	from .PaddedPower import fourier_noise_map
-	ellNoise=np.arange(5,lCut) # ell range for noise spectrum
+	ellNoise=np.arange(5,lCut+200) # ell range for noise spectrum
 	
 	from .RandomField import fill_from_model
 	#fourierNoise=fourier_noise_map
 	
 	from .PaddedPower import fourier_noise_test
-	fourierNoise,unpadded_noise=fourier_noise_test(padded_window,unpadded_window,ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
+	fourierNoise,unpadded_noise=fourier_noise_test(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False,log=a.log_noise)
+	
+	unpadded_noise=DegradeFourier(unpadded_noise.copy(),lCut)
+	fourierNoise=DegradeFourier(fourierNoise.copy(),lCut)
+	#print unpadded_noise.Nx,fourierNoise.Nx
+	padded_window=DegradeMap(padded_window.copy(),lCut)
+	unpadded_window=DegradeMap(unpadded_window.copy(),lCut)
+	
 	#unpadded_noise=unpadded_fBdust.copy() # this map is generated completely in Fourier space to avoid errors
 	#unpadded_noise.kMap=fill_from_model(unpadded_fBdust.copy(),total_Cl_noise,fourier=True,power=False)
 	#fourierNoise=fourier_noise_map(padded_window.copy(),unpadded_window.copy(),ellNoise,total_Cl_noise(ellNoise),padding_ratio=padding_ratio,unpadded=False)
@@ -173,9 +184,31 @@ def padded_wrap(map_id,map_size=a.map_size,\
 	#return fourierNoise,unpadded_noise
 	
 	# Compute total map
-	totFmap=fBdust.copy()
+	#ellTrial=lCut+200
+	#while True: # hack to ensure same sized maps
+#		if fourierNoise.Nx==fBdust.Nx:
+#			if fourierNoise.Ny==fBdust.Ny:
+#				break
+#		fourierNoise=DegradeFourier(fourierNoise.copy(),ellTrial)
+#		fBdust_large=DegradeFourier(fBdust_large.copy(),ellTrial)
+#		ellTrial-=1.
+#		if ellTrial<lCut-200:
+#			print 'failed1'
+#			break
+#	ellCut=lCut+200
+#	while True:
+#		if unpadded_noise.Nx==unpadded_fBdust_large.Nx:
+###			if unpadded_noise.Ny==unpadded_fBdust_large.Ny:
+#				break
+#		unpadded_noise=DegradeFourier(unpadded_noise.copy(),ellTrial)
+#		unpadded_fBdust_large=DegradeFourier(unpadded_fBdust_large.copy(),ellTrial)
+#		ellTrial-=1.
+#		if ellTrial<lCut:
+#			print 'failed2'
+#			break
+	totFmap=DegradeFourier(fBdust.copy(),lCut)				
 	totFmap.kMap+=fourierNoise.kMap# for total B modes
-	unpadded_totFmap=unpadded_fBdust.copy()
+	unpadded_totFmap=DegradeFourier(unpadded_fBdust.copy(),lCut)
 	unpadded_totFmap.kMap+=unpadded_noise.kMap
 	
 	

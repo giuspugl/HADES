@@ -6,7 +6,7 @@ class BICEP:
 	""" Class containing (mostly) essential model parameters for KK estimators using BICEP data"""
 	
 	# Root directory
-	root_dir = '/data/ohep2/CleanWidePatch/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
+	root_dir = '/data/ohep2/FullSkyDedusting/'#'/data/ohep2/{Simons/,sims/,BICEP2/,FFP8/,liteBIRD/,CleanWidePatch/}'# root directory for simulations
 	
 	# Tile parameters
 	map_size =  3 # Width of each map
@@ -15,21 +15,30 @@ class BICEP:
 	N_sims = 500 # Number of MC sims
 	N_bias = 500 # no. sims used for bias computation
 	freq = 150 # Frequency of simulation in GHz (353 is Vansyngel, 150 is BICEP)
-	padding_ratio=2. # padded map width / original map width 
+	padding_ratio=1. # padded map width / original map width 
 	unPadded=False # do not apply any zero-padding if true
 	
 	useQU=False # use root(Q^2+U^2) maps for dedusting - else use I maps
 	rTest = False # replace data with r= 0.1 spectrum
 	
+	debias_dedust=True
+	
+	# CHANGE THIS!!
 	rescale_freq = True # rescale to correct frequency - turn OFF for rTests etc.
 	
 	KKdebiasH2 = True # subtract expected noise spectrum for Afs, Afc in estimators
-	
 	log_noise = False # use log scaling for noise - only for large noise levels
 	
-	true_lensing = False # use FFP10 lensing spectrum rather than CAMB one
+	true_lensing = True # use FFP10 lensing spectrum rather than CAMB one
 	camb_spectrum = False # rescale FFP10 to CAMB 1D power spectrum for compatibility
 	ffp10_spectrum = True # use FFP10 spectrum rather than 1D CAMB one
+	
+	# testing
+	fixFactor = False # use fixed SNR in estimators
+	realFourier = False
+	padded_1D_spectrum = True
+	
+	test_fix_A=False
 	
 	# Estimator parameters
 	l_step=400./map_size*1./padding_ratio # pixel size is 360/map_size/padding_ratio)
@@ -39,6 +48,7 @@ class BICEP:
 		lMin=180.*3./map_size*1./padding_ratio #240.*3./map_size*1./padding_ratio
 	lMax = 2000. # ranges to fit spectrum over 
 	f_dust=1.
+	f_noise=1. # for testing
 
 	# Planck dust SED (XXII/LIV papers)
 	dust_temperature = 19.6
@@ -84,6 +94,7 @@ class BICEP:
 		flipU=True # if using COSMO polarisation convention, reverse sign of U for compatibility with flipper (else IAU convention)
 	
 	# Lensing
+	full_lens_dir='/data/ohep2/FullNoiseLens/Lens/'
 	lensedDir='/data/ohep2/CAMB_lensedCl.npz'
 	CAMBrDir='/data/ohep2/CAMB_r.npz' # for r = 0.1
 	rot_average = True # pre-rotate to correct for pixellations
@@ -95,7 +106,7 @@ class BICEP:
 	noi_par_delensing=[0.1,1.0]
 	
 	# Null testing parameters
-	f_dust_all = list(np.arange(1.0,-0.05,-0.05))#np.arange(1,-0.2,-0.2)##[1e-6]+list(np.logspace(-3,0,30))#np.arange(1.,-0.05,-0.05) [1e-10,1.0]#[1e-10,1.0]#
+	f_dust_all = [1e-5]+list(np.logspace(-2,0,30))#list(np.arange(1.0,-0.05,-0.1))#05))#[1e-10,1.0]#
 	err_repeats = 10#0 # repeat for uncertainties
 	
 	## OTHER TESTING PARAMETERS
@@ -104,8 +115,10 @@ class BICEP:
 	useBias=True # correct for SIM-SIM - DATA-SIM bias
 	useTensors=False #True # include r = 0.1 tensor modes
 	I2SNR = False # use <I^2> to estimate the SNR for patch anisotropy measurements
+	
 	debiasA = True # for debiasing of monopole amplitude using noise only sims
-	exactCen = True#True # for computing centre of one-D bins
+	
+	exactCen = True#True # for computing centre of one-D bins	
 	useLensing = True # DEPRACATED: if False, just set delensing_fraction=0.
 	KKmethod=False # if False, apply Sherwin SNR ratio not KK SNR
 	send_email=False # send email on completion

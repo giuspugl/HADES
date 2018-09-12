@@ -27,6 +27,7 @@ def lens_ratio_correction(lensPower,lensFourier,delensing_fraction=a.delensing_f
     # First compute the binned power from the maps
     from .PowerMap import oneD_binning
     llF,ppF=oneD_binning(lensPower,1,lMax,l_step,exactCen=False)
+    
     from .lens_power import ffp10_lensing
     ideal_lens=ffp10_lensing(delensing_fraction) # expected power 
     
@@ -40,11 +41,8 @@ def lens_ratio_correction(lensPower,lensFourier,delensing_fraction=a.delensing_f
 
     # Now rescale the Fourier map by sqrt(ratio)
     fourierScaled=lensFourier.copy()
-    #	try:
     fourierScaled.kMap=fourierScaled.kMap*np.sqrt(ratio(fourierScaled.modLMap))
-    #	except RuntimeWarning:
-    #        pass
-
+    
     return fourierScaled
         
 def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,\
@@ -61,9 +59,10 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
 
     Output: lensing B-mode map in fourier [and power]-space  
     """
+    raise Exception('Depracated')
     import flipperPol as fp
     
-    inDir=a.root_dir+'lens/%sdeg%s/' %(map_size,sep)
+    inDir='LensTest/%sdeg%s/' %(map_size,sep)
     
     # Read in original maps from file
     Tmap=liteMap.liteMapFromFits(inDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
@@ -95,7 +94,7 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
     
     # Rescale to correct delensing fraction
     fB.kMap*=np.sqrt(delensing_fraction)
-    
+
     # Account for window factor - this accounts for power loss due to padding
     fB.kMap/=np.sqrt(windowFactor)
     #fE.kMap/=np.sqrt(windowFactor)
@@ -124,5 +123,64 @@ def MakeFourierLens(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep
         return fBcorr
     elif power:
         del fBcorr
+        return BBcorr
+    
+def MakeFourierLens2(map_id,padding_ratio=a.padding_ratio,map_size=a.map_size,sep=a.sep,\
+            fourier=True,power=False,delensing_fraction=a.delensing_fraction):
+    """ Function to create 2D B-mode fourier map from FFP10 lensed scalar map.
+    Yanked from PaddedPower.MakePowerAndFourierMaps
+    Input: map_id (tile number)
+    map_size (in degrees)
+    sep (separation of map centres)
+    padding_ratio (ratio of padded map width to original (real-space) map width)
+    fourier (return fourier space map?)
+    power (return power map?)
+    delensing_fraction (how much (uniform) delensing is applied)
+
+    Output: lensing B-mode map in fourier [and power]-space  
+    """
+    import flipperPol as fp
+    
+    lDir=a.full_lens_dir+'%sdeg%s/' %(map_size,sep)
+    lTmap=liteMap.liteMapFromFits(lDir+'fvsmapT_'+str(map_id).zfill(5)+'.fits')
+    lQmap=liteMap.liteMapFromFits(lDir+'fvsmapQ_'+str(map_id).zfill(5)+'.fits')
+    lUmap=liteMap.liteMapFromFits(lDir+'fvsmapU_'+str(map_id).zfill(5)+'.fits')
+    lUmap.data*=-1. # for U-flip convention
+
+    maskMap=liteMap.liteMapFromFits(lDir+'fvsmapMaskSmoothed_'+str(map_id).zfill(5)+'.fits')
+    
+    # Compute zero-padded maps (including mask map)
+    from .PaddedPower import zero_padding
+    zTmap=zero_padding(lTmap,padding_ratio)
+    zQmap=zero_padding(lQmap,padding_ratio)
+    zUmap=zero_padding(lUmap,padding_ratio)
+    zWindow=zero_padding(maskMap,padding_ratio)
+    
+    del lTmap,lQmap,lUmap
+    
+    # Compute window factor <W^2> for padded window (since this is only region with data)
+    windowFactor=np.mean(zWindow.data**2.)
+    
+    modL,angL=fp.fftPol.makeEllandAngCoordinate(zTmap) # choice of map is arbitary
+    _,_,fB=fp.fftPol.TQUtoPureTEB(zTmap,zQmap,zUmap,zWindow,modL,angL,method='standard') # use standard since no E-modes present
+    
+    del zTmap,zQmap,zUmap,modL,angL
+    
+    # Rescale to correct delensing fraction
+    fB.kMap*=np.sqrt(delensing_fraction)
+
+    # Account for window factor - this accounts for power loss due to padding
+    fB.kMap/=np.sqrt(windowFactor)
+    #fE.kMap/=np.sqrt(windowFactor)
+    #fT.kMap/=np.sqrt(windowFactor)
+    
+    if power:
+        BBcorr=fftTools.powerFromFFT(fB)
+    if fourier and power:
+        return fB,BBcorr
+    elif fourier:
+        return fB
+    elif power:
+        del fB
         return BBcorr
     

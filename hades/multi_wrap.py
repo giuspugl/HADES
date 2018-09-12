@@ -10,7 +10,7 @@ def runner(index):
     os.system(string)
     return None
     
-p=mp.Pool()
+p=mp.Pool(6)
 indices=np.arange(500)
 #p.map(runner,indices)
 out=list(tqdm.tqdm(p.imap_unordered(runner,indices),total=len(indices)))

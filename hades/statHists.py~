@@ -140,7 +140,7 @@ if __name__=='__main__':
 	import multiprocessing as mp
 	import tqdm
 	p=mp.Pool()
-	N=int(200000)
+	N=int(500000)
 	#from hades.statHists import run_MC
 	out=list(tqdm.tqdm(p.imap_unordered(run_MC,range(N)),total=N))
 	A=[o[0] for o in out]

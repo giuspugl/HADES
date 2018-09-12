@@ -34,7 +34,7 @@ ra=dat['ras']
 dec=dat['decs']
 eps=dat['eps']
 eps_mean=dat['eps_mean']
-H2=dat['H2']
+H2=dat['H2']#'_MC']
 ang=dat['angle']
 A=dat['A']
 ang_err=dat['angle_err']
@@ -52,7 +52,7 @@ template=np.zeros(hp.nside2npix(NSIDE))
 weights,tempSA,tempSH2,tempSang=[np.zeros_like(template) for _ in range(4)]
 
 for i in range(len(ra)):
-	if H2[i]>=0.:
+	if True:#H2[i]>=0.:
 	        pix=hp.ang2pix(NSIDE,ra[i],dec[i],lonlat=True)
 	        tempSA[pix]=(A[i]+weights[pix]*tempSA[pix])/(weights[pix]+1.) # compute mean if more than one point
 	        tempSH2[pix]=(H2[i]+weights[pix]*tempSH2[pix])/(weights[pix]+1.) # compute mean if more than one point
@@ -221,6 +221,7 @@ for mask_index in range(len(all_masks)):
     Cl=hp.read_cl(outCl)
     Corr=Cl/np.sqrt(ClA[-1][3]*ClH2[-1][3])
     X,Y,E=CorByn(Corr[4:],5)
+    np.savez('CorrTestDust.npz',cross=Cl,A=ClA,H2=ClH2)
     #idx=np.where(X>0.)
     
     #Xp=X[idx] # avoid negatives
